@@ -1,0 +1,149 @@
+export interface NetworkSummary {
+  consensusMode: "PoA" | "DLC";
+  lastFinalizedRound: number;
+  lastBlockId: string;
+  hashTimer: string;
+  tps: number;
+  activeValidators: number;
+}
+
+export interface AiStatus {
+  modelHash: string;
+  usingStub: boolean;
+  mode: "PoA" | "DLC";
+}
+
+export interface HealthStatus {
+  consensus: boolean;
+  dhtFile: {
+    mode: "stub" | "libp2p";
+    healthy: boolean;
+  };
+  dhtHandle: {
+    mode: "stub" | "libp2p";
+    healthy: boolean;
+  };
+  storage: boolean;
+  rpc: boolean;
+}
+
+export interface BlockSummary {
+  id: string;
+  hash: string;
+  timestamp: string;
+  hashTimer: string;
+  txCount: number;
+}
+
+export interface Transaction {
+  hash: string;
+  from: string;
+  to: string;
+  amount: number;
+  amountAtomic: string;
+  fee: number;
+  timestamp: string;
+  hashTimer: string;
+  type: string;
+  status: string;
+  blockId?: string;
+}
+
+export interface BlockDetail extends BlockSummary {
+  parents: string[];
+  transactions: Transaction[];
+}
+
+export interface AccountSummary {
+  address: string;
+  balance: number;
+  balanceAtomic: string;
+  nonce: number;
+  handles?: string[];
+}
+
+export interface PaymentEntry {
+  direction: "incoming" | "outgoing" | "self";
+  amount: number;
+  fee: number;
+  counterparty: string;
+  timestamp: string;
+  hash: string;
+}
+
+export interface HandleRecord {
+  handle: string;
+  owner: string;
+  expiresAt: string;
+  dhtStatus: string;
+}
+
+export interface FileRecord {
+  id: string;
+  owner: string;
+  size: number;
+  mimeType?: string;
+  mode: "stub" | "libp2p";
+  description?: string;
+}
+
+export type StatusResponseV1 = {
+  head: {
+    hash_timer_id: string;
+    ippan_time: string;
+    round_height: number;
+    block_height: number;
+    finalized: boolean;
+    hash_timer_seq?: string;
+  };
+  counters: {
+    finalized_rounds: number;
+    transactions_total: number;
+    total_issuance: number;
+    accounts_total: number;
+    holders_total?: number;
+    hash_timers_total: number;
+    ai_requests_total?: number;
+  };
+  live: {
+    round_time_avg_ms: number;
+    finality_time_ms: number;
+    current_epoch: number;
+    epoch_progress_pct: number;
+    active_operators: number;
+  };
+  latest_blocks: Array<{
+    block_height: number;
+    hash_timer_id: string;
+    round_height: number;
+    tx_count: number;
+    age_ms?: number;
+    proposer?: string;
+  }>;
+  latest_rounds: Array<{
+    round_height: number;
+    finalized: boolean;
+    block_count: number;
+    tx_count: number;
+    finality_ms: number;
+    start_hash_timer_id?: string;
+    end_hash_timer_id?: string;
+  }>;
+  consensus: {
+    metrics_available: boolean;
+    validators: Array<{
+      validator_id: string;
+      uptime_ratio_7d?: number;
+      validated_blocks_7d?: number;
+      missed_blocks_7d?: number;
+      avg_latency_ms?: number;
+      slashing_events_90d?: number;
+      stake_normalized?: number;
+      peer_reports_quality?: number;
+      fairness_score?: number;
+      reward_weight?: number;
+      status?: string;
+      last_seen_hash_timer?: string;
+    }>;
+  };
+};

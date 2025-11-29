@@ -1,0 +1,77 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import SimpleTable from "@/components/tables/SimpleTable";
+import JsonViewer from "@/components/common/JsonViewer";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { getBlockById } from "@/lib/mockData";
+import { formatAmount, formatTimestamp, shortenHash } from "@/lib/format";
+
+interface BlockDetailPageProps {
+  params: { id: string };
+}
+
+export default async function BlockDetailPage({ params }: BlockDetailPageProps) {
+  const block = await getBlockById(params.id);
+  if (!block) {
+    notFound();
+  }
+  const resolvedBlock = block;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={`Block #${resolvedBlock.id}`}
+        description={`Hash ${shortenHash(resolvedBlock.hash)}`}
+        actions={
+          <Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">
+            ← Back to blocks
+          </Link>
+        }
+      />
+
+      <Card title="Block header">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <p className="text-xs uppercase text-slate-500">Timestamp</p>
+            <p className="text-lg font-semibold text-slate-50">{formatTimestamp(resolvedBlock.timestamp)}</p>
+            <p className="text-xs text-slate-500">HashTimer {resolvedBlock.hashTimer}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-slate-500">Parents</p>
+            <div className="text-sm text-slate-200">
+              {resolvedBlock.parents.map((parent) => (
+                <div key={parent}>{parent}</div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Transactions" description={`${resolvedBlock.transactions.length} transactions`}>
+        <SimpleTable
+          data={resolvedBlock.transactions}
+          columns={[
+            {
+              key: "hash",
+              header: "Tx",
+              render: (row) => (
+                <Link href={`/tx/${row.hash}`} className="text-emerald-300">
+                  {shortenHash(row.hash)}
+                </Link>
+              )
+            },
+            { key: "from", header: "From", render: (row) => shortenHash(row.from) },
+            { key: "to", header: "To", render: (row) => shortenHash(row.to) },
+            { key: "amount", header: "Amount", render: (row) => formatAmount(row.amount) },
+            { key: "fee", header: "Fee", render: (row) => `${row.fee} IPN` }
+          ]}
+        />
+      </Card>
+
+      <Card title="Raw block JSON">
+        <JsonViewer data={resolvedBlock} />
+      </Card>
+    </div>
+  );
+}
