@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Route } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { DashboardGraphs } from "@/components/DashboardGraphs";
 import CopyButton from "@/components/common/CopyButton";
 import StatusDataTabs from "@/components/common/StatusDataTabs";
@@ -140,7 +140,9 @@ export default async function DashboardPage() {
         </div>
       </Card>
 
-      <DashboardGraphs status={status} peersCount={peers.peers.length} />
+      <Suspense fallback={<div className="h-32 rounded-lg border border-slate-800/70 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">Loading graphs…</div>}>
+        <DashboardGraphs status={status} peersCount={peers.peers.length} />
+      </Suspense>
 
       <Card
         title="Network activity"

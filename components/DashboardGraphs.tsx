@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Histogram } from "./Histogram";
 import { Sparkline } from "./Sparkline";
@@ -42,8 +43,23 @@ function formatNumber(value: number | undefined) {
   return value.toLocaleString();
 }
 
+function seedSeries(values: number[], fallback: number) {
+  if (values.length >= 2) return values;
+  if (values.length === 1) return [values[0], values[0]];
+  return [fallback, fallback];
+}
+
 export function DashboardGraphs({ status, peersCount }: { status: StatusResponseV1; peersCount?: number }) {
   const [samples, setSamples] = useState<Sample[]>([]);
+  const [mounted, setMounted] = useState(false);
+  const searchParams = useSearchParams();
+  const debugEnabled = searchParams?.get("debug") === "1";
+
+  const liveSample = useMemo(() => toSample(status, peersCount), [status, peersCount]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -62,30 +78,38 @@ export function DashboardGraphs({ status, peersCount }: { status: StatusResponse
     return () => window.clearInterval(interval);
   }, []);
 
+  const samplesToUse = samples.length ? samples : [liveSample];
+
   const { roundSeries, finalitySeries, tpsSeries, activeSeries, peerSeries, tenMinuteTps } = useMemo(() => {
     const tpsValues: Array<{ t: number; value: number }> = [];
-    const tpsRaw = computeTpsSeries(samples);
-    samples.forEach((sample, idx) => {
+    const tpsRaw = computeTpsSeries(samplesToUse);
+    samplesToUse.forEach((sample, idx) => {
       tpsValues.push({ t: sample.t_ms, value: tpsRaw[idx] ?? 0 });
     });
     const tenMinuteCutoff = Date.now() - 10 * 60 * 1000;
     const recentTps = tpsValues.filter((point) => point.t >= tenMinuteCutoff).map((point) => point.value);
 
     return {
-      roundSeries: samples.map((sample) => sample.round_ms),
-      finalitySeries: samples.map((sample) => sample.finality_ms),
+      roundSeries: samplesToUse.map((sample) => sample.round_ms),
+      finalitySeries: samplesToUse.map((sample) => sample.finality_ms),
       tpsSeries: tpsValues.map((point) => point.value),
-      activeSeries: samples.map((sample) => sample.active_ops),
-      peerSeries: samples.map((sample) => sample.peers ?? 0).filter((value) => value > 0),
+      activeSeries: samplesToUse.map((sample) => sample.active_ops),
+      peerSeries: samplesToUse.map((sample) => sample.peers ?? 0).filter((value) => value > 0),
       tenMinuteTps: average(recentTps)
     };
-  }, [samples]);
+  }, [samplesToUse]);
 
-  const latestRound = roundSeries.at(-1) ?? status.live.round_time_avg_ms;
-  const latestFinality = finalitySeries.at(-1) ?? status.live.finality_time_ms;
-  const latestTps = tpsSeries.at(-1) ?? 0;
-  const latestActive = activeSeries.at(-1) ?? status.live.active_operators;
-  const latestPeers = peerSeries.at(-1);
+  const seededRoundSeries = seedSeries(roundSeries, status.live.round_time_avg_ms ?? 0);
+  const seededFinalitySeries = seedSeries(finalitySeries, status.live.finality_time_ms ?? 0);
+  const seededTpsSeries = seedSeries(tpsSeries, 0);
+  const seededActiveSeries = seedSeries(activeSeries, status.live.active_operators ?? 0);
+  const seededPeerSeries = seedSeries(peerSeries, peersCount ?? 0);
+
+  const latestRound = seededRoundSeries.at(-1) ?? status.live.round_time_avg_ms;
+  const latestFinality = seededFinalitySeries.at(-1) ?? status.live.finality_time_ms;
+  const latestTps = seededTpsSeries.at(-1) ?? 0;
+  const latestActive = seededActiveSeries.at(-1) ?? status.live.active_operators;
+  const latestPeers = seededPeerSeries.at(-1);
 
   const fairnessScores = status.consensus.validators
     .map((validator) => validator.fairness_score)
@@ -98,20 +122,18 @@ export function DashboardGraphs({ status, peersCount }: { status: StatusResponse
     <div className="space-y-4">
       <Card title="Performance" description="Live samples held in localStorage; updates when the dashboard refreshes">
         <div className="grid gap-3 md:grid-cols-3">
-          <MetricSparkline label="Round time" value={`${formatNumber(latestRound)} ms`} series={roundSeries} />
-          <MetricSparkline label="Finality time" value={`${formatNumber(latestFinality)} ms`} series={finalitySeries} />
+          <MetricSparkline label="Round time" value={`${formatNumber(latestRound)} ms`} series={seededRoundSeries} />
+          <MetricSparkline label="Finality time" value={`${formatNumber(latestFinality)} ms`} series={seededFinalitySeries} />
           <MetricSparkline
             label="Estimated TPS"
             value={`${formatNumber(latestTps)} tx/s`}
             hint={tenMinuteTps ? `~${tenMinuteTps.toLocaleString()} avg (10m)` : undefined}
-            series={tpsSeries}
+            series={seededTpsSeries}
           />
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          <MetricSparkline label="Active operators" value={formatNumber(latestActive)} series={activeSeries} />
-          {peerSeries.length > 0 && (
-            <MetricSparkline label="Peers" value={formatNumber(latestPeers)} series={peerSeries} />
-          )}
+          <MetricSparkline label="Active operators" value={formatNumber(latestActive)} series={seededActiveSeries} />
+          <MetricSparkline label="Peers" value={formatNumber(latestPeers)} series={seededPeerSeries} />
         </div>
       </Card>
 
@@ -141,6 +163,25 @@ export function DashboardGraphs({ status, peersCount }: { status: StatusResponse
           </div>
         </div>
       </Card>
+
+      {debugEnabled && (
+        <div className="fixed bottom-3 right-3 z-50 max-w-xs rounded-lg border border-emerald-500/40 bg-slate-950/90 p-3 text-xs text-emerald-100 shadow-lg shadow-emerald-500/10">
+          <p className="font-semibold text-emerald-200">DashboardGraphs debug</p>
+          <ul className="mt-1 space-y-1">
+            <li>mounted: {mounted ? "true" : "false"}</li>
+            <li>samples length: {samples.length}</li>
+            <li>effective samples: {samplesToUse.length}</li>
+            <li>roundSeries: {seededRoundSeries.length}</li>
+            <li>finalitySeries: {seededFinalitySeries.length}</li>
+            <li>tpsSeries: {seededTpsSeries.length}</li>
+            <li>activeSeries: {seededActiveSeries.length}</li>
+            <li>peerSeries: {seededPeerSeries.length}</li>
+            <li>latest round: {latestRound ?? "n/a"}</li>
+            <li>latest finality: {latestFinality ?? "n/a"}</li>
+            <li>latest tps: {latestTps ?? "n/a"}</li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -166,7 +207,7 @@ function MetricSparkline({
   hint?: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-800/70 bg-slate-950/60 px-3 py-2 shadow-inner shadow-black/20">
+    <div className="flex h-32 flex-col justify-between rounded-lg border border-slate-800/70 bg-slate-950/60 px-3 py-2 shadow-inner shadow-black/20">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
@@ -174,7 +215,9 @@ function MetricSparkline({
           {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
         </div>
       </div>
-      <Sparkline values={series} height={50} width={220} />
+      <div className="h-16 text-emerald-400">
+        <Sparkline values={series} className="h-full w-full" />
+      </div>
     </div>
   );
 }
