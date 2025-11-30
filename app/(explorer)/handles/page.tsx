@@ -5,11 +5,11 @@ import { getHandleRecord } from "@/lib/mockData";
 import { formatTimestamp } from "@/lib/format";
 
 interface HandlesPageProps {
-  searchParams: { handle?: string };
+  searchParams: { handle?: string; query?: string };
 }
 
 export default async function HandlesPage({ searchParams }: HandlesPageProps) {
-  const handleQuery = searchParams.handle;
+  const handleQuery = searchParams.handle ?? searchParams.query;
   const record = handleQuery ? await getHandleRecord(handleQuery) : undefined;
 
   return (

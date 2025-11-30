@@ -6,12 +6,12 @@ import { FormEvent, useState } from "react";
 export default function HandleSearchForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const [value, setValue] = useState(params.get("handle") ?? "");
+  const [value, setValue] = useState(params.get("handle") ?? params.get("query") ?? "");
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!value) return;
-    router.push(`/handles?handle=${encodeURIComponent(value)}`);
+    router.push(`/handles?query=${encodeURIComponent(value)}`);
   };
 
   return (

@@ -35,7 +35,15 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
           <div>
             <p className="text-xs uppercase text-slate-500">Timestamp</p>
             <p className="text-lg font-semibold text-slate-50">{formatTimestamp(resolvedBlock.timestamp)}</p>
-            <p className="text-xs text-slate-500">HashTimer {resolvedBlock.hashTimer}</p>
+            <p className="text-xs text-slate-500">
+              HashTimer
+              <Link
+                href={`/hashtimers/${resolvedBlock.hashTimer}`}
+                className="ml-1 text-emerald-300 underline-offset-4 hover:underline"
+              >
+                {resolvedBlock.hashTimer}
+              </Link>
+            </p>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-500">Parents</p>
