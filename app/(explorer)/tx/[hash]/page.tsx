@@ -36,7 +36,18 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
           <Detail label="To" value={resolvedTx.to} />
           <Detail label="Amount" value={formatAmount(resolvedTx.amount)} hint={`${resolvedTx.amountAtomic} atomic`} />
           <Detail label="Fee" value={`${resolvedTx.fee} IPN`} />
-          <Detail label="Timestamp" value={formatTimestamp(resolvedTx.timestamp)} hint={`HashTimer ${resolvedTx.hashTimer}`} />
+          <Detail label="Timestamp" value={formatTimestamp(resolvedTx.timestamp)} />
+          <Detail
+            label="HashTimer"
+            value={
+              <Link
+                href={`/hashtimers/${resolvedTx.hashTimer}`}
+                className="text-emerald-300 underline-offset-4 hover:underline"
+              >
+                {resolvedTx.hashTimer}
+              </Link>
+            }
+          />
           {resolvedTx.blockId && (
             <Detail
               label="Included in block"

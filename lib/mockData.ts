@@ -9,7 +9,8 @@ import type {
   NetworkSummary,
   PaymentEntry,
   StatusResponseV1,
-  Transaction
+  Transaction,
+  HashTimerDetail
 } from "@/types/rpc";
 
 const now = new Date();
@@ -24,7 +25,7 @@ const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index)
   amountAtomic: ((12.5 + index) * 1e9).toFixed(0),
   fee: 0.05,
   timestamp: new Date(now.getTime() - index * 60000).toISOString(),
-  hashTimer: makeHashTimer(20000 + index),
+  hashTimer: makeHashTimer(12030 + (index % 5)),
   type: index % 2 === 0 ? "payment" : "handle",
   status: "finalized",
   blockId: (1000 - index).toString()
@@ -167,6 +168,36 @@ const files: FileRecord[] = [
     description: "Test model artifact"
   }
 ];
+
+export function mockHashtimer(id: string): HashTimerDetail {
+  const normalizedId = id.trim() || statusSnapshot.head.hash_timer_id;
+  const relatedTxs = mockTransactions.filter(
+    (tx) => tx.hashTimer.toLowerCase() === normalizedId.toLowerCase()
+  );
+  const relatedBlock = mockBlocks.find(
+    (block) => block.hashTimer.toLowerCase() === normalizedId.toLowerCase()
+  );
+  const numericPart = Number(normalizedId.replace(/\D/g, ""));
+  const parentId = Number.isFinite(numericPart)
+    ? `ht-${Math.max(numericPart - 1, 0).toString().padStart(8, "0")}`
+    : undefined;
+
+  return {
+    hash_timer_id: normalizedId,
+    ippan_time: relatedBlock?.timestamp ?? relatedTxs[0]?.timestamp ?? now.toISOString(),
+    round_height:
+      relatedBlock && statusSnapshot.latest_blocks.find((b) => b.hash_timer_id === relatedBlock.hashTimer)?.round_height,
+    block_height: relatedBlock ? Number(relatedBlock.id) : undefined,
+    tx_ids: relatedTxs.map((tx) => tx.hash),
+    tx_count: relatedTxs.length || undefined,
+    parents: parentId ? [parentId] : undefined,
+    canonical_digest: `digest-${normalizedId.replace(/^ht-/, "")}`
+  };
+}
+
+export function getHashTimerDetail(id: string): Promise<HashTimerDetail> {
+  return Promise.resolve(mockHashtimer(id));
+}
 
 export function getNetworkSummary(): Promise<NetworkSummary> {
   return Promise.resolve({

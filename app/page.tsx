@@ -1,3 +1,4 @@
+import Link from "next/link";
 import CopyButton from "@/components/common/CopyButton";
 import StatusDataTabs from "@/components/common/StatusDataTabs";
 import { Card } from "@/components/ui/Card";
@@ -34,7 +35,12 @@ export default async function DashboardPage() {
         headerSlot={<CopyButton text={status.head.hash_timer_id} label="Copy HashTimer" />}
       >
         <div className="flex flex-wrap items-center gap-3 text-base">
-          <p className="font-mono text-lg text-emerald-100">{status.head.hash_timer_id}</p>
+          <Link
+            href={`/hashtimers/${status.head.hash_timer_id}`}
+            className="font-mono text-lg text-emerald-100 underline-offset-4 hover:underline"
+          >
+            {status.head.hash_timer_id}
+          </Link>
           <StatusPill status={status.head.finalized ? "ok" : "warn"} />
           {status.head.hash_timer_seq && (
             <span className="rounded-full bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Seq {status.head.hash_timer_seq}</span>

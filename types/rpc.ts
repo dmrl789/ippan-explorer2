@@ -49,6 +49,17 @@ export interface Transaction {
   blockId?: string;
 }
 
+export type HashTimerDetail = {
+  hash_timer_id: string;
+  ippan_time?: string;
+  round_height?: number;
+  block_height?: number;
+  tx_ids?: string[];
+  tx_count?: number;
+  parents?: string[]; // optional DAG refs
+  canonical_digest?: string;
+};
+
 export interface BlockDetail extends BlockSummary {
   parents: string[];
   transactions: Transaction[];

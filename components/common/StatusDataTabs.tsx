@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import SimpleTable from "@/components/tables/SimpleTable";
@@ -54,7 +55,15 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
           data={blocks}
           columns={[
             { key: "block_height", header: "Block", render: (row) => `#${row.block_height.toLocaleString()}` },
-            { key: "hash_timer_id", header: "HashTimer", render: (row) => <code className="text-emerald-200">{row.hash_timer_id}</code> },
+            {
+              key: "hash_timer_id",
+              header: "HashTimer",
+              render: (row) => (
+                <Link href={`/hashtimers/${row.hash_timer_id}`} className="text-emerald-200 underline-offset-4 hover:underline">
+                  {row.hash_timer_id}
+                </Link>
+              )
+            },
             { key: "round_height", header: "Round" },
             { key: "tx_count", header: "Txs" },
             { key: "age_ms", header: "Age", render: (row) => formatAge(row.age_ms) },
