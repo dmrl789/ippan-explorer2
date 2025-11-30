@@ -8,14 +8,31 @@ import type {
   HealthStatus,
   NetworkSummary,
   PaymentEntry,
+  PeerInfo,
+  PeersResponse,
   StatusResponseV1,
   Transaction,
   HashTimerDetail
 } from "@/types/rpc";
+import { assertHashTimerId, isHashTimerId, makeMockHashTimer } from "@/lib/hashtimer";
 
 const now = new Date();
+const nowMicros = BigInt(now.getTime()) * 1000n;
+const microsAgo = (ms: number) => nowMicros - BigInt(ms) * 1000n;
 
-const makeHashTimer = (value: number) => `ht-${value.toString().padStart(8, "0")}`;
+const isPresent = (value: string | undefined | null): value is string => Boolean(value);
+
+const blockHashTimers = Array.from({ length: 5 }).map((_, index) =>
+  makeMockHashTimer(`block-${index}`, microsAgo(index * 120000))
+);
+
+const roundStartTimers = Array.from({ length: 5 }).map((_, index) =>
+  makeMockHashTimer(`round-start-${index}`, microsAgo((index + 1) * 180000))
+);
+
+const roundEndTimers = Array.from({ length: 5 }).map((_, index) =>
+  makeMockHashTimer(`round-end-${index}`, microsAgo((index + 1) * 150000))
+);
 
 const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index) => ({
   hash: `0xmocktx${index}`.padEnd(66, "0"),
@@ -25,7 +42,7 @@ const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index)
   amountAtomic: ((12.5 + index) * 1e9).toFixed(0),
   fee: 0.05,
   timestamp: new Date(now.getTime() - index * 60000).toISOString(),
-  hashTimer: makeHashTimer(12030 + (index % 5)),
+  hashTimer: blockHashTimers[index % blockHashTimers.length],
   type: index % 2 === 0 ? "payment" : "handle",
   status: "finalized",
   blockId: (1000 - index).toString()
@@ -35,7 +52,7 @@ const mockBlocks: BlockDetail[] = Array.from({ length: 5 }).map((_, index) => ({
   id: (1005 - index).toString(),
   hash: `0xmockblock${index}`.padEnd(66, "a"),
   timestamp: new Date(now.getTime() - index * 120000).toISOString(),
-  hashTimer: makeHashTimer(12030 + index),
+  hashTimer: blockHashTimers[index],
   txCount: 3 + index,
   parents: [(1004 - index).toString(), (1003 - index).toString()],
   transactions: mockTransactions.slice(0, 4)
@@ -43,7 +60,7 @@ const mockBlocks: BlockDetail[] = Array.from({ length: 5 }).map((_, index) => ({
 
 const statusSnapshot: StatusResponseV1 = {
   head: {
-    hash_timer_id: "ht-00001234",
+    hash_timer_id: blockHashTimers[0],
     ippan_time: now.toISOString(),
     round_height: 12034,
     block_height: Number(mockBlocks[0].id),
@@ -80,8 +97,8 @@ const statusSnapshot: StatusResponseV1 = {
     block_count: 2 + index,
     tx_count: 8 + index * 3,
     finality_ms: 1500 + index * 120,
-    start_hash_timer_id: `ht-0000${12030 - index}`,
-    end_hash_timer_id: `ht-0000${12031 - index}`
+    start_hash_timer_id: roundStartTimers[index],
+    end_hash_timer_id: roundEndTimers[index]
   })),
   consensus: {
     metrics_available: true,
@@ -98,7 +115,7 @@ const statusSnapshot: StatusResponseV1 = {
         fairness_score: 0.88,
         reward_weight: 0.31,
         status: "active",
-        last_seen_hash_timer: "ht-00001234"
+        last_seen_hash_timer: blockHashTimers[1]
       },
       {
         validator_id: "validator-2",
@@ -112,7 +129,7 @@ const statusSnapshot: StatusResponseV1 = {
         fairness_score: 0.81,
         reward_weight: 0.26,
         status: "active",
-        last_seen_hash_timer: "ht-00001233"
+        last_seen_hash_timer: blockHashTimers[2]
       },
       {
         validator_id: "validator-3",
@@ -126,11 +143,29 @@ const statusSnapshot: StatusResponseV1 = {
         fairness_score: 0.78,
         reward_weight: 0.22,
         status: "syncing",
-        last_seen_hash_timer: "ht-00001231"
+        last_seen_hash_timer: blockHashTimers[3]
       }
     ]
   }
 };
+
+function validateMockHashTimers() {
+  const ids = [
+    statusSnapshot.head.hash_timer_id,
+    ...blockHashTimers,
+    ...roundStartTimers,
+    ...roundEndTimers,
+    ...mockTransactions.map((tx) => tx.hashTimer),
+    ...statusSnapshot.latest_rounds.flatMap((round) => [round.start_hash_timer_id, round.end_hash_timer_id]).filter(isPresent),
+    ...statusSnapshot.consensus.validators
+      .map((validator) => validator.last_seen_hash_timer)
+      .filter(isPresent)
+  ];
+
+  ids.forEach((id) => assertHashTimerId(id));
+}
+
+validateMockHashTimers();
 
 const accountSummary: AccountSummary = {
   address: "0xAccount000000000000000000000000000000000000",
@@ -169,18 +204,37 @@ const files: FileRecord[] = [
   }
 ];
 
+const peers: PeerInfo[] = [
+  {
+    peer_id: "12D3KooWPeer000000000000000000000000000000000000000000000000001",
+    addr: "/ip4/192.168.1.10/tcp/4001",
+    agent: "ippan-node/0.1.0",
+    last_seen_ms: 4200
+  },
+  {
+    peer_id: "12D3KooWPeer000000000000000000000000000000000000000000000000002",
+    addr: "/ip4/10.0.0.5/tcp/4001",
+    agent: "ippan-node/0.1.0",
+    last_seen_ms: 9800
+  },
+  {
+    peer_id: "12D3KooWPeer000000000000000000000000000000000000000000000000003",
+    addr: "/dns4/bootstrap.libp2p/tcp/4001",
+    agent: "go-libp2p/0.30.0",
+    last_seen_ms: 15800
+  }
+];
+
 export function mockHashtimer(id: string): HashTimerDetail {
-  const normalizedId = id.trim() || statusSnapshot.head.hash_timer_id;
-  const relatedTxs = mockTransactions.filter(
-    (tx) => tx.hashTimer.toLowerCase() === normalizedId.toLowerCase()
-  );
-  const relatedBlock = mockBlocks.find(
-    (block) => block.hashTimer.toLowerCase() === normalizedId.toLowerCase()
-  );
-  const numericPart = Number(normalizedId.replace(/\D/g, ""));
-  const parentId = Number.isFinite(numericPart)
-    ? `ht-${Math.max(numericPart - 1, 0).toString().padStart(8, "0")}`
-    : undefined;
+  const normalizedInput = id.trim() || statusSnapshot.head.hash_timer_id;
+  const normalizedId = isHashTimerId(normalizedInput) ? normalizedInput : statusSnapshot.head.hash_timer_id;
+  const relatedTxs = mockTransactions.filter((tx) => tx.hashTimer.toLowerCase() === normalizedId.toLowerCase());
+  const relatedBlock = mockBlocks.find((block) => block.hashTimer.toLowerCase() === normalizedId.toLowerCase());
+
+  const timePrefix = normalizedId.slice(0, 14);
+  const microsValue = BigInt(`0x${timePrefix}`);
+  const parentMicros = microsValue > 0n ? microsValue - 1n : 0n;
+  const parentId = makeMockHashTimer(`parent-of-${normalizedId}`, parentMicros);
 
   return {
     hash_timer_id: normalizedId,
@@ -191,7 +245,7 @@ export function mockHashtimer(id: string): HashTimerDetail {
     tx_ids: relatedTxs.map((tx) => tx.hash),
     tx_count: relatedTxs.length || undefined,
     parents: parentId ? [parentId] : undefined,
-    canonical_digest: `digest-${normalizedId.replace(/^ht-/, "")}`
+    canonical_digest: `digest-${normalizedId.slice(14)}`
   };
 }
 
@@ -266,4 +320,8 @@ export function getFileRecord(id: string): Promise<FileRecord | undefined> {
 
 export function getFiles(): Promise<FileRecord[]> {
   return Promise.resolve(files);
+}
+
+export function getPeers(): Promise<PeersResponse> {
+  return Promise.resolve({ source: "mock", peers });
 }
