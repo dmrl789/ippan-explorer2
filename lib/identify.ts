@@ -1,6 +1,6 @@
-export function isHashTimerId(value: string): boolean {
-  return /^ht-[a-fA-F0-9]+$/i.test(value.trim());
-}
+import { isHashTimerId } from "@/lib/hashtimer";
+
+export { isHashTimerId };
 
 export function isTxHash(value: string): boolean {
   const trimmed = value.trim();

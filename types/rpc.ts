@@ -158,3 +158,15 @@ export type StatusResponseV1 = {
     }>;
   };
 };
+
+export type PeerInfo = {
+  peer_id: string;
+  addr?: string;
+  agent?: string;
+  last_seen_ms?: number;
+};
+
+export type PeersResponse = {
+  source: "rpc" | "mock";
+  peers: PeerInfo[];
+};

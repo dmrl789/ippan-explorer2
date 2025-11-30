@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import SimpleTable from "@/components/tables/SimpleTable";
 import TabSwitcher from "@/components/common/TabSwitcher";
-import { shortenHash } from "@/lib/format";
+import { isHashTimerId, shortHashTimer } from "@/lib/hashtimer";
 import type { StatusResponseV1 } from "@/types/rpc";
 
 interface StatusDataTabsProps {
@@ -37,6 +37,41 @@ function formatAge(ageMs?: number) {
   return `${minutes}m ago`;
 }
 
+function renderHashTimer(id: string) {
+  if (isHashTimerId(id)) {
+    return (
+      <Link href={`/hashtimers/${id}`} className="text-emerald-200 underline-offset-4 hover:underline">
+        {shortHashTimer(id)}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="inline-flex w-max items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-tight text-amber-200">
+        Invalid
+      </span>
+      <span className="break-all font-mono text-[11px] text-slate-400">{id}</span>
+    </div>
+  );
+}
+
+function renderHashTimerSpan(start?: string, end?: string) {
+  if (start && end && isHashTimerId(start) && isHashTimerId(end)) {
+    return `${shortHashTimer(start, 6)} → ${shortHashTimer(end, 6)}`;
+  }
+  if (!start && !end) return "—";
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="inline-flex w-max items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-tight text-amber-200">
+        Invalid
+      </span>
+      <span className="break-all font-mono text-[11px] text-slate-400">{[start, end].filter(Boolean).join(" → ")}</span>
+    </div>
+  );
+}
+
 export default function StatusDataTabs({ blocks, rounds, validators }: StatusDataTabsProps) {
   const tabs = [
     { id: "blocks", label: "Latest Blocks" },
@@ -55,15 +90,7 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
           data={blocks}
           columns={[
             { key: "block_height", header: "Block", render: (row) => `#${row.block_height.toLocaleString()}` },
-            {
-              key: "hash_timer_id",
-              header: "HashTimer",
-              render: (row) => (
-                <Link href={`/hashtimers/${row.hash_timer_id}`} className="text-emerald-200 underline-offset-4 hover:underline">
-                  {row.hash_timer_id}
-                </Link>
-              )
-            },
+            { key: "hash_timer_id", header: "HashTimer", render: (row) => renderHashTimer(row.hash_timer_id) },
             { key: "round_height", header: "Round" },
             { key: "tx_count", header: "Txs" },
             { key: "age_ms", header: "Age", render: (row) => formatAge(row.age_ms) },
@@ -84,10 +111,7 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
             {
               key: "start_hash_timer_id",
               header: "HashTimer span",
-              render: (row) =>
-                row.start_hash_timer_id && row.end_hash_timer_id
-                  ? `${shortenHash(row.start_hash_timer_id, 6)} → ${shortenHash(row.end_hash_timer_id, 6)}`
-                  : "—"
+              render: (row) => renderHashTimerSpan(row.start_hash_timer_id, row.end_hash_timer_id)
             }
           ]}
         />

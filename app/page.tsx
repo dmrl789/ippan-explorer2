@@ -8,9 +8,13 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { formatTimestamp } from "@/lib/format";
 import { fetchStatus } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
+import { fetchPeers } from "@/lib/peers";
+
 export default async function DashboardPage() {
   const status = await fetchStatus();
+  const peers = await fetchPeers();
   const rpcBase = getRpcBaseUrl();
+  const isMockMode = peers.source === "mock";
 
   return (
     <div className="space-y-6">
@@ -69,6 +73,68 @@ export default async function DashboardPage() {
           value={status.counters.ai_requests_total ? formatNumber(status.counters.ai_requests_total) : "—"}
           hint="From /ai/status"
         />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card
+          title="Network"
+          description="Peer connectivity and IPNDHT reachability from /peers"
+          headerSlot={
+            <span
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
+                peers.source === "rpc"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+              }`}
+            >
+              Source: {peers.source === "rpc" ? "RPC" : "Mock"}
+            </span>
+          }
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-3xl font-semibold text-emerald-100">{peers.peers.length}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Peers discovered</p>
+            </div>
+            <Link
+              href="/network"
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
+            >
+              View network
+            </Link>
+          </div>
+          <p className="text-xs text-slate-400">Surfaced via /api/peers with automatic mock fallback.</p>
+        </Card>
+
+        <Card
+          title="IPNDHT"
+          description="Distributed registry layer for handles + files"
+          headerSlot={
+            isMockMode ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
+                Mock mode
+              </span>
+            ) : undefined
+          }
+        >
+          <p className="text-sm text-slate-300">
+            Handles and files are backed by the IPNDHT registry layer. Use these shortcuts to jump straight into the dedicated views.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/handles"
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
+            >
+              Go to handles
+            </Link>
+            <Link
+              href="/files"
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
+            >
+              Go to files
+            </Link>
+          </div>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
