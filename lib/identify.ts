@@ -1,4 +1,4 @@
-import { isHashTimerId } from "@/lib/hashtimer";
+import { HASHTIMER_RE, isHashTimerId } from "@/lib/hashtimer";
 
 export { isHashTimerId };
 
@@ -19,12 +19,22 @@ export function isAddress(value: string): boolean {
   return /^0x[a-zA-Z0-9]{20,}$/.test(value.trim());
 }
 
+function normalizeHashTimerInput(value: string): string | undefined {
+  const withoutPrefix = value.replace(/^HT-/i, "");
+  const lower = withoutPrefix.toLowerCase();
+  if (HASHTIMER_RE.test(lower)) {
+    return lower;
+  }
+  return undefined;
+}
+
 export function routeForQuery(query: string): string {
   const value = query.trim();
   if (!value) return "/";
 
-  if (isHashTimerId(value)) {
-    return `/hashtimers/${value}`;
+  const hashTimerCandidate = normalizeHashTimerInput(value);
+  if (hashTimerCandidate) {
+    return `/hashtimers/${hashTimerCandidate}`;
   }
 
   if (isTxHash(value)) {

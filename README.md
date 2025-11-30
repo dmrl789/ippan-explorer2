@@ -13,8 +13,9 @@ The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUB
 
 ## Pages
 
-- `/` – Global dashboard with network, AI, health and recent activity.
+- `/` – Global dashboard with network, AI, health and recent activity, plus IPPAN feature shortcuts.
 - `/network` – Peer inventory from `/peers` with mock fallback and IPNDHT context.
+- `/ipndht` – Aggregated IPNDHT view with handles, files, providers, and peer counts.
 - `/blocks` – Latest blocks, plus `/blocks/[id]` for block details + transactions.
 - `/tx/[hash]` – Transaction detail + raw JSON view.
 - `/accounts/[address]` – Account overview with balance, nonce and paginated payments.
@@ -24,12 +25,13 @@ The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUB
 
 ## HashTimer spec
 
-HashTimers follow the IPPAN format: a 64-character lowercase hexadecimal string with no prefix, shaped as `<14-hex time prefix><50-hex BLAKE3 hash>`. The UI validates every HashTimer column and marks any invalid values, and mock data is generated via `lib/hashtimer.ts` to stay spec-compliant.
+HashTimers follow the IPPAN format: a 64-character lowercase hexadecimal string with no prefix, shaped as `<14-hex time prefix><50-hex BLAKE3 hash>`. The explorer enforces this canonical format across mocks and UI rendering: invalid values get a red badge, and mock HashTimers are generated in `lib/hashtimer.ts` to stay spec-compliant.
 
 ## Network + IPNDHT features
 
 - `/api/peers` proxies to `${NEXT_PUBLIC_IPPAN_RPC_URL}/peers` when available or returns stable mock peers otherwise.
-- The dashboard and `/network` page show peer counts and data sources, alongside IPNDHT entry points for handles and files.
+- `/api/ipndht` aggregates handles, files, providers, and peer counts from RPC (with per-section mock fallback) for the `/ipndht` page.
+- The dashboard highlights live vs. mock sources for HashTimers, IPNDHT, peers, and operator status; `/network` and `/ipndht` expose detailed tables with the same source badges.
 - Node health draws from `/health` + `/status` (or mocks), while IPNDHT-facing UX for handles/files remains available even in mock mode.
 
 ## Tech stack

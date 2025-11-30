@@ -1,13 +1,17 @@
 export type HashTimerId = string;
 
-const HASH_TIMER_REGEX = /^[0-9a-f]{64}$/;
+export const HASHTIMER_RE = /^[0-9a-f]{64}$/;
+
+function normalize(value: string): string {
+  return value.trim();
+}
 
 export function isHashTimerId(value: string): value is HashTimerId {
-  return HASH_TIMER_REGEX.test(value.trim());
+  return HASHTIMER_RE.test(normalize(value));
 }
 
 export function shortHashTimer(id: string, size = 8): string {
-  const trimmed = id.trim();
+  const trimmed = normalize(id);
   if (trimmed.length <= size * 2) return trimmed;
   return `${trimmed.slice(0, size)}…${trimmed.slice(-size)}`;
 }
@@ -37,7 +41,13 @@ export function makeMockHashTimer(seed = "mock-hashtimer", micros?: bigint): Has
   const state = { value: seedFromString(`${seed}:${timeHex}`) };
   const bytes = Array.from({ length: 25 }, () => nextByte(state));
   const suffix = bytes.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `${timeHex}${suffix}`;
+  const id = `${timeHex}${suffix}`;
+
+  if (!HASHTIMER_RE.test(id)) {
+    throw new Error(`Invalid mock HashTimer generated: ${id}`);
+  }
+
+  return id;
 }
 
 export function assertHashTimerId(id: string): asserts id is HashTimerId {

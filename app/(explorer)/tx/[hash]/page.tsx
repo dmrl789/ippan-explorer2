@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import JsonViewer from "@/components/common/JsonViewer";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { getTransaction } from "@/lib/mockData";
 import { formatAmount, formatTimestamp, shortenHash } from "@/lib/format";
 
@@ -40,12 +41,10 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
           <Detail
             label="HashTimer"
             value={
-              <Link
-                href={`/hashtimers/${resolvedTx.hashTimer}`}
-                className="text-emerald-300 underline-offset-4 hover:underline"
-              >
-                {resolvedTx.hashTimer}
-              </Link>
+              <HashTimerValue
+                id={resolvedTx.hashTimer}
+                linkClassName="text-emerald-300 underline-offset-4 hover:underline"
+              />
             }
           />
           {resolvedTx.blockId && (

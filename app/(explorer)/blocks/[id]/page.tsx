@@ -4,6 +4,7 @@ import SimpleTable from "@/components/tables/SimpleTable";
 import JsonViewer from "@/components/common/JsonViewer";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { getBlockById } from "@/lib/mockData";
 import { formatAmount, formatTimestamp, shortenHash } from "@/lib/format";
 
@@ -32,18 +33,18 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
 
       <Card title="Block header">
         <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-xs uppercase text-slate-500">Timestamp</p>
-            <p className="text-lg font-semibold text-slate-50">{formatTimestamp(resolvedBlock.timestamp)}</p>
-            <p className="text-xs text-slate-500">
-              HashTimer
-              <Link
-                href={`/hashtimers/${resolvedBlock.hashTimer}`}
-                className="ml-1 text-emerald-300 underline-offset-4 hover:underline"
-              >
-                {resolvedBlock.hashTimer}
-              </Link>
-            </p>
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs uppercase text-slate-500">Timestamp</p>
+              <p className="text-lg font-semibold text-slate-50">{formatTimestamp(resolvedBlock.timestamp)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase text-slate-500">HashTimer</p>
+              <HashTimerValue
+                id={resolvedBlock.hashTimer}
+                linkClassName="font-mono text-sm text-emerald-300 underline-offset-4 hover:underline"
+              />
+            </div>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-500">Parents</p>

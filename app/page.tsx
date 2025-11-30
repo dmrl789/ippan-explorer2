@@ -1,20 +1,27 @@
 import Link from "next/link";
+import type { Route } from "next";
+import type { ReactNode } from "react";
 import CopyButton from "@/components/common/CopyButton";
 import StatusDataTabs from "@/components/common/StatusDataTabs";
+import { HashTimerValue } from "@/components/common/HashTimerValue";
+import { SourceBadge } from "@/components/common/SourceBadge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Stat } from "@/components/ui/Stat";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { formatTimestamp } from "@/lib/format";
-import { fetchStatus } from "@/lib/status";
+import { fetchStatusWithSource } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
+import { fetchIpndht } from "@/lib/ipndht";
 
 export default async function DashboardPage() {
-  const status = await fetchStatus();
-  const peers = await fetchPeers();
+  const [{ status, source: statusSource }, peers, ipndht] = await Promise.all([
+    fetchStatusWithSource(),
+    fetchPeers(),
+    fetchIpndht()
+  ]);
   const rpcBase = getRpcBaseUrl();
-  const isMockMode = peers.source === "mock";
 
   return (
     <div className="space-y-6">
@@ -39,13 +46,12 @@ export default async function DashboardPage() {
         headerSlot={<CopyButton text={status.head.hash_timer_id} label="Copy HashTimer" />}
       >
         <div className="flex flex-wrap items-center gap-3 text-base">
-          <Link
-            href={`/hashtimers/${status.head.hash_timer_id}`}
-            className="font-mono text-lg text-emerald-100 underline-offset-4 hover:underline"
-          >
-            {status.head.hash_timer_id}
-          </Link>
+          <HashTimerValue
+            id={status.head.hash_timer_id}
+            linkClassName="font-mono text-lg text-emerald-100 underline-offset-4 hover:underline"
+          />
           <StatusPill status={status.head.finalized ? "ok" : "warn"} />
+          <SourceBadge source={statusSource} label={statusSource === "rpc" ? "Live" : "Mock"} />
           {status.head.hash_timer_seq && (
             <span className="rounded-full bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Seq {status.head.hash_timer_seq}</span>
           )}
@@ -55,6 +61,39 @@ export default async function DashboardPage() {
           <DetailItem label="Round height" value={`#${status.head.round_height.toLocaleString()}`} />
           <DetailItem label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
           <DetailItem label="Finalized" value={status.head.finalized ? "Finalized" : "Pending"} />
+        </div>
+      </Card>
+
+      <Card title="IPPAN features" description="Fast links into HashTimers, IPNDHT, peers, and operator/AI status">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FeatureCard
+            title="HashTimer"
+            href={`/hashtimers/${status.head.hash_timer_id}` as Route}
+            source={statusSource}
+            subtitle="Head anchor"
+            value={<HashTimerValue id={status.head.hash_timer_id} short />}
+          />
+          <FeatureCard
+            title="IPNDHT"
+            href={"/ipndht" as Route}
+            source={ipndht.source}
+            subtitle="Handles + Files + Providers"
+            value={`${ipndht.summary.handles} handles · ${ipndht.summary.files} files`}
+          />
+          <FeatureCard
+            title="Network peers"
+            href={"/network" as Route}
+            source={peers.source}
+            subtitle="Libp2p view"
+            value={`${peers.peers.length.toLocaleString()} peers`}
+          />
+          <FeatureCard
+            title="Operator + AI status"
+            href={"/status" as Route}
+            source={statusSource}
+            subtitle="/status JSON"
+            value={`Epoch ${status.live.current_epoch} · ${status.live.active_operators} active`}
+          />
         </div>
       </Card>
 
@@ -73,68 +112,6 @@ export default async function DashboardPage() {
           value={status.counters.ai_requests_total ? formatNumber(status.counters.ai_requests_total) : "—"}
           hint="From /ai/status"
         />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card
-          title="Network"
-          description="Peer connectivity and IPNDHT reachability from /peers"
-          headerSlot={
-            <span
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-                peers.source === "rpc"
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-200"
-              }`}
-            >
-              Source: {peers.source === "rpc" ? "RPC" : "Mock"}
-            </span>
-          }
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-3xl font-semibold text-emerald-100">{peers.peers.length}</p>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Peers discovered</p>
-            </div>
-            <Link
-              href="/network"
-              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
-            >
-              View network
-            </Link>
-          </div>
-          <p className="text-xs text-slate-400">Surfaced via /api/peers with automatic mock fallback.</p>
-        </Card>
-
-        <Card
-          title="IPNDHT"
-          description="Distributed registry layer for handles + files"
-          headerSlot={
-            isMockMode ? (
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
-                Mock mode
-              </span>
-            ) : undefined
-          }
-        >
-          <p className="text-sm text-slate-300">
-            Handles and files are backed by the IPNDHT registry layer. Use these shortcuts to jump straight into the dedicated views.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/handles"
-              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
-            >
-              Go to handles
-            </Link>
-            <Link
-              href="/files"
-              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
-            >
-              Go to files
-            </Link>
-          </div>
-        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -208,6 +185,38 @@ function DetailItem({ label, value }: { label: string; value: string | number })
     <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 px-3 py-2">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="text-sm font-semibold text-slate-100">{value}</p>
+    </div>
+  );
+}
+
+function FeatureCard({
+  title,
+  subtitle,
+  href,
+  value,
+  source
+}: {
+  title: string;
+  subtitle: string;
+  href: Route;
+  value: string | ReactNode;
+  source: "rpc" | "mock";
+}) {
+  return (
+    <div className="flex flex-col justify-between rounded-lg border border-slate-800/70 bg-slate-950/50 px-4 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{subtitle}</p>
+          <p className="text-lg font-semibold text-slate-100">{title}</p>
+        </div>
+        <SourceBadge source={source} />
+      </div>
+      <div className="mt-3 flex items-center justify-between">
+        <div className="text-sm text-slate-200">{value}</div>
+        <Link href={href} className="text-xs text-emerald-300 underline-offset-4 hover:underline">
+          Open
+        </Link>
+      </div>
     </div>
   );
 }
