@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import type { ReactNode } from "react";
+import { DashboardGraphs } from "@/components/DashboardGraphs";
 import CopyButton from "@/components/common/CopyButton";
 import StatusDataTabs from "@/components/common/StatusDataTabs";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
@@ -118,48 +119,28 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Live network" description="Consensus tempo and operator activity">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <DetailItem label="Avg round time" value={formatMsValue(status.live.round_time_avg_ms)} />
-            <DetailItem label="Finality time" value={formatMsValue(status.live.finality_time_ms)} />
-            <DetailItem label="Current epoch" value={`Epoch ${status.live.current_epoch}`} />
-            <DetailItem label="Active operators" value={formatNumber(status.live.active_operators)} />
+      <Card title="Live network" description="Consensus tempo and operator activity">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DetailItem label="Avg round time" value={formatMsValue(status.live.round_time_avg_ms)} />
+          <DetailItem label="Finality time" value={formatMsValue(status.live.finality_time_ms)} />
+          <DetailItem label="Current epoch" value={`Epoch ${status.live.current_epoch}`} />
+          <DetailItem label="Active operators" value={formatNumber(status.live.active_operators)} />
+        </div>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Epoch progress</span>
+            <span>{status.live.epoch_progress_pct}%</span>
           </div>
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Epoch progress</span>
-              <span>{status.live.epoch_progress_pct}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-slate-800">
-              <div
-                className="h-2 rounded-full bg-emerald-500"
-                style={{ width: `${Math.min(Math.max(status.live.epoch_progress_pct, 0), 100)}%` }}
-              />
-            </div>
+          <div className="h-2 rounded-full bg-slate-800">
+            <div
+              className="h-2 rounded-full bg-emerald-500"
+              style={{ width: `${Math.min(Math.max(status.live.epoch_progress_pct, 0), 100)}%` }}
+            />
           </div>
-        </Card>
+        </div>
+      </Card>
 
-        <Card title="D-GBDT Dataset readiness" description="Signals needed for dataset exports and scoring">
-          <div className="flex items-center gap-3">
-            <span
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-                status.consensus.metrics_available
-                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                  : "border-amber-500/40 bg-amber-500/10 text-amber-200"
-              }`}
-            >
-              <span className="h-2 w-2 rounded-full bg-current" />
-              {status.consensus.metrics_available ? "Metrics available" : "Metrics unavailable"}
-            </span>
-            <p className="text-xs text-slate-400">If false, exported CSV will be empty.</p>
-          </div>
-          <div className="grid gap-2 text-sm text-slate-300 sm:grid-cols-2">
-            <DetailItem label="Validator dataset fields" value="uptime, validated/missed, latency, slashing, stake, peer quality" />
-            <DetailItem label="Validators tracked" value={`${status.consensus.validators.length} nodes`} />
-          </div>
-        </Card>
-      </div>
+      <DashboardGraphs status={status} peersCount={peers.peers.length} />
 
       <Card
         title="Network activity"
