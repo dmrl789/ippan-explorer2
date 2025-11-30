@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL` (defaults to `http://localhost:8080`). All data is mocked locally for now, but every page is wired through a reusable `fetchJson` helper so you can swap in real endpoints when available.
+The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL`. For local development you can point it to `http://localhost:8080`; in production the explorer runs in mock mode when the variable is unset so UI links never point at localhost.
 
 ## Pages
 

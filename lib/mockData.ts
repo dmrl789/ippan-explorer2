@@ -14,6 +14,8 @@ import type {
 
 const now = new Date();
 
+const makeHashTimer = (value: number) => `ht-${value.toString().padStart(8, "0")}`;
+
 const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index) => ({
   hash: `0xmocktx${index}`.padEnd(66, "0"),
   from: `0xfrom${index}`.padEnd(66, "1"),
@@ -22,7 +24,7 @@ const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index)
   amountAtomic: ((12.5 + index) * 1e9).toFixed(0),
   fee: 0.05,
   timestamp: new Date(now.getTime() - index * 60000).toISOString(),
-  hashTimer: `${Math.floor(Math.random() * 1000)}ms`,
+  hashTimer: makeHashTimer(20000 + index),
   type: index % 2 === 0 ? "payment" : "handle",
   status: "finalized",
   blockId: (1000 - index).toString()
@@ -32,7 +34,7 @@ const mockBlocks: BlockDetail[] = Array.from({ length: 5 }).map((_, index) => ({
   id: (1005 - index).toString(),
   hash: `0xmockblock${index}`.padEnd(66, "a"),
   timestamp: new Date(now.getTime() - index * 120000).toISOString(),
-  hashTimer: `${200 + index * 5}ms`,
+  hashTimer: makeHashTimer(12030 + index),
   txCount: 3 + index,
   parents: [(1004 - index).toString(), (1003 - index).toString()],
   transactions: mockTransactions.slice(0, 4)

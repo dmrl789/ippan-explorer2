@@ -1,7 +1,7 @@
-const baseUrl = process.env.NEXT_PUBLIC_IPPAN_RPC_URL ?? "http://localhost:8080";
+import { buildRpcUrl } from "./rpcBase";
 
 export async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${baseUrl}${path}`, init);
+  const res = await fetch(buildRpcUrl(path), init);
   if (!res.ok) {
     throw new Error(`RPC ${path} failed: ${res.status}`);
   }
