@@ -4,15 +4,12 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Stat } from "@/components/ui/Stat";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { fetchJson } from "@/lib/api";
 import { formatTimestamp } from "@/lib/format";
-import { getStatus } from "@/lib/mockData";
-import type { StatusResponseV1 } from "@/types/rpc";
-
-const rpcBase = process.env.NEXT_PUBLIC_IPPAN_RPC_URL ?? "http://localhost:8080";
-
+import { fetchStatus } from "@/lib/status";
+import { getRpcBaseUrl } from "@/lib/rpcBase";
 export default async function DashboardPage() {
-  const status = await getStatusData();
+  const status = await fetchStatus();
+  const rpcBase = getRpcBaseUrl();
 
   return (
     <div className="space-y-6">
@@ -21,7 +18,7 @@ export default async function DashboardPage() {
         description="HashTimer-first explorer view with live consensus, readiness, and validator metrics"
         actions={
           <a
-            href={`${rpcBase}/status`}
+            href={rpcBase ? `${rpcBase}/status` : "/api/status"}
             target="_blank"
             rel="noreferrer"
             className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
@@ -141,13 +138,4 @@ function DetailItem({ label, value }: { label: string; value: string | number })
       <p className="text-sm font-semibold text-slate-100">{value}</p>
     </div>
   );
-}
-
-async function getStatusData(): Promise<StatusResponseV1> {
-  try {
-    return await fetchJson<StatusResponseV1>("/status");
-  } catch (error) {
-    console.warn("Falling back to mock status due to RPC error", error);
-    return getStatus();
-  }
 }
