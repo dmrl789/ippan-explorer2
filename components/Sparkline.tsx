@@ -41,12 +41,12 @@ function buildBaseline(width: number, height: number) {
 
 export function Sparkline({
   values,
-  width = 160,
-  height = 44,
+  width = 100,
+  height = 32,
   strokeWidth = 2,
   className,
-  stroke = "#34d399",
-  backgroundStroke = "#1f2937"
+  stroke = "currentColor",
+  backgroundStroke = "currentColor"
 }: SparklineProps) {
   const min = values.length ? Math.min(...values) : 0;
   const max = values.length ? Math.max(...values) : 0;
@@ -55,7 +55,15 @@ export function Sparkline({
 
   return (
     <div className={className}>
-      <svg width={width} height={height} role="img" aria-label="sparkline" className="overflow-visible">
+      <svg
+        role="img"
+        aria-label="sparkline"
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        className="h-full w-full overflow-visible"
+      >
         {showBaseline && (
           <path
             d={buildBaseline(width, height)}
@@ -63,7 +71,7 @@ export function Sparkline({
             stroke={backgroundStroke}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            opacity={0.6}
+            opacity={0.4}
           />
         )}
         {path && (
