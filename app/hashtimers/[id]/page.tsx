@@ -7,6 +7,7 @@ import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatTimestamp, shortenHash } from "@/lib/format";
+import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 import type { HashTimerDetail } from "@/types/rpc";
 
 interface HashTimerPageProps {
@@ -26,6 +27,15 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
   const detail = (await response.json()) as HashTimerDetail;
   const transactions = detail.tx_ids ?? [];
   const parents = detail.parents ?? [];
+  const ippanMs =
+    detail.ippan_time_ms ??
+    (detail.ippan_time_us
+      ? toMsFromUs(detail.ippan_time_us)
+      : detail.ippan_time
+        ? new Date(detail.ippan_time).getTime()
+        : undefined);
+  const ippanIso =
+    ippanMs !== undefined ? formatMs(ippanMs) : detail.ippan_time ? formatTimestamp(detail.ippan_time) : "—";
 
   return (
     <div className="space-y-6">
@@ -47,7 +57,8 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
           )}
         </div>
         <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-3">
-          <Detail label="IPPAN time" value={detail.ippan_time ? formatTimestamp(detail.ippan_time) : "—"} />
+          <Detail label="IPPAN Time (ms)" value={ippanMs !== undefined ? ippanMs.toLocaleString() : "—"} />
+          <Detail label="UTC" value={ippanIso} />
           <Detail
             label="Round height"
             value={detail.round_height !== undefined ? `#${detail.round_height.toLocaleString()}` : "—"}

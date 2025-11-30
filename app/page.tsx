@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Stat } from "@/components/ui/Stat";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { formatTimestamp } from "@/lib/format";
+import { formatMs } from "@/lib/ippanTime";
 import { fetchStatusWithSource } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
@@ -57,7 +57,11 @@ export default async function DashboardPage() {
           )}
         </div>
         <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-4">
-          <DetailItem label="IPPAN time" value={formatTimestamp(status.head.ippan_time)} />
+          <DetailItem
+            label="IPPAN Time (ms)"
+            value={status.head.ippan_time_ms.toLocaleString()}
+            secondary={`UTC ${formatMs(status.head.ippan_time_ms)}`}
+          />
           <DetailItem label="Round height" value={`#${status.head.round_height.toLocaleString()}`} />
           <DetailItem label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
           <DetailItem label="Finalized" value={status.head.finalized ? "Finalized" : "Pending"} />
@@ -117,8 +121,8 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Live network" description="Consensus tempo and operator activity">
           <div className="grid gap-3 sm:grid-cols-2">
-            <DetailItem label="Avg round time" value={formatMs(status.live.round_time_avg_ms)} />
-            <DetailItem label="Finality time" value={formatMs(status.live.finality_time_ms)} />
+            <DetailItem label="Avg round time" value={formatMsValue(status.live.round_time_avg_ms)} />
+            <DetailItem label="Finality time" value={formatMsValue(status.live.finality_time_ms)} />
             <DetailItem label="Current epoch" value={`Epoch ${status.live.current_epoch}`} />
             <DetailItem label="Active operators" value={formatNumber(status.live.active_operators)} />
           </div>
@@ -176,15 +180,24 @@ function formatNumber(value: number) {
   return value.toLocaleString();
 }
 
-function formatMs(value: number) {
+function formatMsValue(value: number) {
   return `${value.toLocaleString()} ms`;
 }
 
-function DetailItem({ label, value }: { label: string; value: string | number }) {
+function DetailItem({
+  label,
+  value,
+  secondary
+}: {
+  label: string;
+  value: string | number;
+  secondary?: string;
+}) {
   return (
     <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 px-3 py-2">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="text-sm font-semibold text-slate-100">{value}</p>
+      {secondary && <p className="text-xs text-slate-400">{secondary}</p>}
     </div>
   );
 }

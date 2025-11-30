@@ -33,6 +33,8 @@ export interface BlockSummary {
   timestamp: string;
   hashTimer: string;
   txCount: number;
+  ippan_time_us?: string;
+  ippan_time_ms?: number;
 }
 
 export interface Transaction {
@@ -47,11 +49,15 @@ export interface Transaction {
   type: string;
   status: string;
   blockId?: string;
+  ippan_time_us?: string;
+  ippan_time_ms?: number;
 }
 
 export type HashTimerDetail = {
   hash_timer_id: string;
   ippan_time?: string;
+  ippan_time_us?: string;
+  ippan_time_ms?: number;
   round_height?: number;
   block_height?: number;
   tx_ids?: string[];
@@ -101,7 +107,9 @@ export interface FileRecord {
 export type StatusResponseV1 = {
   head: {
     hash_timer_id: string;
-    ippan_time: string;
+    ippan_time?: string;
+    ippan_time_us?: string;
+    ippan_time_ms: number;
     round_height: number;
     block_height: number;
     finalized: boolean;

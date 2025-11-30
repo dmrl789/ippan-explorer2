@@ -16,9 +16,11 @@ import type {
   IpndhtResponse
 } from "@/types/rpc";
 import { assertHashTimerId, isHashTimerId, makeMockHashTimer } from "@/lib/hashtimer";
+import { toMsFromUs } from "@/lib/ippanTime";
 
 const now = new Date();
 const nowMicros = BigInt(now.getTime()) * 1000n;
+const nowMs = toMsFromUs(nowMicros);
 const microsAgo = (ms: number) => nowMicros - BigInt(ms) * 1000n;
 
 const isPresent = (value: string | undefined | null): value is string => Boolean(value);
@@ -35,34 +37,50 @@ const roundEndTimers = Array.from({ length: 5 }).map((_, index) =>
   makeMockHashTimer(`round-end-${index}`, microsAgo((index + 1) * 150000))
 );
 
-const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index) => ({
-  hash: `0xmocktx${index}`.padEnd(66, "0"),
-  from: `0xfrom${index}`.padEnd(66, "1"),
-  to: `0xto${index}`.padEnd(66, "2"),
-  amount: 12.5 + index,
-  amountAtomic: ((12.5 + index) * 1e9).toFixed(0),
-  fee: 0.05,
-  timestamp: new Date(now.getTime() - index * 60000).toISOString(),
-  hashTimer: blockHashTimers[index % blockHashTimers.length],
-  type: index % 2 === 0 ? "payment" : "handle",
-  status: "finalized",
-  blockId: (1000 - index).toString()
-}));
+const mockTransactions: Transaction[] = Array.from({ length: 8 }).map((_, index) => {
+  const txMicros = microsAgo(index * 60000);
+  const txMs = toMsFromUs(txMicros);
 
-const mockBlocks: BlockDetail[] = Array.from({ length: 5 }).map((_, index) => ({
-  id: (1005 - index).toString(),
-  hash: `0xmockblock${index}`.padEnd(66, "a"),
-  timestamp: new Date(now.getTime() - index * 120000).toISOString(),
-  hashTimer: blockHashTimers[index],
-  txCount: 3 + index,
-  parents: [(1004 - index).toString(), (1003 - index).toString()],
-  transactions: mockTransactions.slice(0, 4)
-}));
+  return {
+    hash: `0xmocktx${index}`.padEnd(66, "0"),
+    from: `0xfrom${index}`.padEnd(66, "1"),
+    to: `0xto${index}`.padEnd(66, "2"),
+    amount: 12.5 + index,
+    amountAtomic: ((12.5 + index) * 1e9).toFixed(0),
+    fee: 0.05,
+    timestamp: new Date(txMs).toISOString(),
+    hashTimer: blockHashTimers[index % blockHashTimers.length],
+    type: index % 2 === 0 ? "payment" : "handle",
+    status: "finalized",
+    blockId: (1000 - index).toString(),
+    ippan_time_us: txMicros.toString(),
+    ippan_time_ms: txMs
+  };
+});
+
+const mockBlocks: BlockDetail[] = Array.from({ length: 5 }).map((_, index) => {
+  const blockMicros = microsAgo(index * 120000);
+  const blockMs = toMsFromUs(blockMicros);
+
+  return {
+    id: (1005 - index).toString(),
+    hash: `0xmockblock${index}`.padEnd(66, "a"),
+    timestamp: new Date(blockMs).toISOString(),
+    hashTimer: blockHashTimers[index],
+    txCount: 3 + index,
+    parents: [(1004 - index).toString(), (1003 - index).toString()],
+    transactions: mockTransactions.slice(0, 4),
+    ippan_time_us: blockMicros.toString(),
+    ippan_time_ms: blockMs
+  };
+});
 
 const statusSnapshot: StatusResponseV1 = {
   head: {
     hash_timer_id: blockHashTimers[0],
-    ippan_time: now.toISOString(),
+    ippan_time: new Date(nowMs).toISOString(),
+    ippan_time_us: nowMicros.toString(),
+    ippan_time_ms: nowMs,
     round_height: 12034,
     block_height: Number(mockBlocks[0].id),
     finalized: true,
@@ -275,10 +293,14 @@ export function mockHashtimer(id: string): HashTimerDetail {
   const microsValue = BigInt(`0x${timePrefix}`);
   const parentMicros = microsValue > 0n ? microsValue - 1n : 0n;
   const parentId = makeMockHashTimer(`parent-of-${normalizedId}`, parentMicros);
+  const ippanMs = toMsFromUs(microsValue);
+  const ippanIso = relatedBlock?.timestamp ?? relatedTxs[0]?.timestamp ?? new Date(ippanMs).toISOString();
 
   return {
     hash_timer_id: normalizedId,
-    ippan_time: relatedBlock?.timestamp ?? relatedTxs[0]?.timestamp ?? now.toISOString(),
+    ippan_time: ippanIso,
+    ippan_time_us: microsValue.toString(),
+    ippan_time_ms: ippanMs,
     round_height:
       relatedBlock && statusSnapshot.latest_blocks.find((b) => b.hash_timer_id === relatedBlock.hashTimer)?.round_height,
     block_height: relatedBlock ? Number(relatedBlock.id) : undefined,
