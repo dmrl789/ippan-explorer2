@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { getBlockById } from "@/lib/mockData";
-import { formatAmount, formatTimestamp, shortenHash } from "@/lib/format";
+import { formatAmount, shortenHash } from "@/lib/format";
+import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 
 interface BlockDetailPageProps {
   params: { id: string };
@@ -18,6 +19,12 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
     notFound();
   }
   const resolvedBlock = block;
+  const blockIppanMs =
+    resolvedBlock.ippan_time_ms ??
+    (resolvedBlock.ippan_time_us
+      ? toMsFromUs(resolvedBlock.ippan_time_us)
+      : new Date(resolvedBlock.timestamp).getTime());
+  const blockIso = formatMs(blockIppanMs);
 
   return (
     <div className="space-y-6">
@@ -35,8 +42,9 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <div>
-              <p className="text-xs uppercase text-slate-500">Timestamp</p>
-              <p className="text-lg font-semibold text-slate-50">{formatTimestamp(resolvedBlock.timestamp)}</p>
+              <p className="text-xs uppercase text-slate-500">IPPAN Time (ms)</p>
+              <p className="text-lg font-semibold text-slate-50">{blockIppanMs.toLocaleString()}</p>
+              <p className="text-xs text-slate-400">UTC {blockIso}</p>
             </div>
             <div>
               <p className="text-xs uppercase text-slate-500">HashTimer</p>

@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { getTransaction } from "@/lib/mockData";
-import { formatAmount, formatTimestamp, shortenHash } from "@/lib/format";
+import { formatAmount, shortenHash } from "@/lib/format";
+import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 
 interface TransactionPageProps {
   params: { hash: string };
@@ -18,6 +19,12 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
     notFound();
   }
   const resolvedTx = transaction;
+  const txIppanMs =
+    resolvedTx.ippan_time_ms ??
+    (resolvedTx.ippan_time_us
+      ? toMsFromUs(resolvedTx.ippan_time_us)
+      : new Date(resolvedTx.timestamp).getTime());
+  const txIso = formatMs(txIppanMs);
 
   return (
     <div className="space-y-6">
@@ -37,7 +44,8 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
           <Detail label="To" value={resolvedTx.to} />
           <Detail label="Amount" value={formatAmount(resolvedTx.amount)} hint={`${resolvedTx.amountAtomic} atomic`} />
           <Detail label="Fee" value={`${resolvedTx.fee} IPN`} />
-          <Detail label="Timestamp" value={formatTimestamp(resolvedTx.timestamp)} />
+          <Detail label="IPPAN Time (ms)" value={txIppanMs.toLocaleString()} />
+          <Detail label="UTC" value={txIso} />
           <Detail
             label="HashTimer"
             value={
