@@ -2,10 +2,10 @@ import { getRpcBaseUrl } from "./rpcBase";
 import { getStatus } from "./mockData";
 import type { StatusResponseV1 } from "@/types/rpc";
 
-export async function fetchStatus(): Promise<StatusResponseV1> {
+export async function fetchStatusWithSource(): Promise<{ status: StatusResponseV1; source: "rpc" | "mock" }> {
   const rpcBase = getRpcBaseUrl();
   if (!rpcBase) {
-    return getStatus();
+    return { status: await getStatus(), source: "mock" };
   }
 
   try {
@@ -13,9 +13,15 @@ export async function fetchStatus(): Promise<StatusResponseV1> {
     if (!res.ok) {
       throw new Error(`RPC status failed: ${res.status}`);
     }
-    return res.json();
+    const status = (await res.json()) as StatusResponseV1;
+    return { status, source: "rpc" };
   } catch (error) {
     console.warn("Falling back to mock status due to RPC error", error);
-    return getStatus();
+    return { status: await getStatus(), source: "mock" };
   }
+}
+
+export async function fetchStatus(): Promise<StatusResponseV1> {
+  const { status } = await fetchStatusWithSource();
+  return status;
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import SimpleTable from "@/components/tables/SimpleTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchPeers } from "@/lib/peers";
 
 function formatLastSeen(ms?: number) {
@@ -31,17 +32,7 @@ export default async function NetworkPage() {
       <Card
         title="Peers"
         description="Libp2p peer announcements with agent and address context"
-        headerSlot={
-          <span
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${
-              peerData.source === "rpc"
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                : "border-amber-500/40 bg-amber-500/10 text-amber-200"
-            }`}
-          >
-            Source: {peerData.source === "rpc" ? "RPC" : "Mock"}
-          </span>
-        }
+        headerSlot={<SourceBadge source={peerData.source} />}
       >
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

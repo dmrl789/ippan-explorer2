@@ -12,7 +12,8 @@ import type {
   PeersResponse,
   StatusResponseV1,
   Transaction,
-  HashTimerDetail
+  HashTimerDetail,
+  IpndhtResponse
 } from "@/types/rpc";
 import { assertHashTimerId, isHashTimerId, makeMockHashTimer } from "@/lib/hashtimer";
 
@@ -149,24 +150,6 @@ const statusSnapshot: StatusResponseV1 = {
   }
 };
 
-function validateMockHashTimers() {
-  const ids = [
-    statusSnapshot.head.hash_timer_id,
-    ...blockHashTimers,
-    ...roundStartTimers,
-    ...roundEndTimers,
-    ...mockTransactions.map((tx) => tx.hashTimer),
-    ...statusSnapshot.latest_rounds.flatMap((round) => [round.start_hash_timer_id, round.end_hash_timer_id]).filter(isPresent),
-    ...statusSnapshot.consensus.validators
-      .map((validator) => validator.last_seen_hash_timer)
-      .filter(isPresent)
-  ];
-
-  ids.forEach((id) => assertHashTimerId(id));
-}
-
-validateMockHashTimers();
-
 const accountSummary: AccountSummary = {
   address: "0xAccount000000000000000000000000000000000000",
   balance: 15234.123,
@@ -224,6 +207,63 @@ const peers: PeerInfo[] = [
     last_seen_ms: 15800
   }
 ];
+
+const ipndhtHandles = [
+  {
+    handle: "@ippan.ai",
+    owner: accountSummary.address,
+    hash_timer_id: makeMockHashTimer("handle-ippan", microsAgo(45000))
+  },
+  {
+    handle: "@ai.models",
+    owner: "0xAccount000000000000000000000000000000000999",
+    hash_timer_id: makeMockHashTimer("handle-aimodels", microsAgo(76000))
+  },
+  {
+    handle: "@node.operator",
+    owner: accountSummary.address,
+    hash_timer_id: makeMockHashTimer("handle-operator", microsAgo(105000))
+  }
+];
+
+const ipndhtFiles = [
+  {
+    file_id: "file-01",
+    size_bytes: files[0].size,
+    hash_timer_id: makeMockHashTimer("file-01", microsAgo(60000))
+  },
+  {
+    file_id: "model-weights-v2",
+    size_bytes: 1024 * 1024 * 22,
+    hash_timer_id: makeMockHashTimer("file-weights", microsAgo(89000))
+  }
+];
+
+const ipndhtProviders = [
+  { peer_id: peers[0].peer_id, provides: "both" as const },
+  { peer_id: peers[1].peer_id, provides: "handles" as const },
+  { peer_id: peers[2].peer_id, provides: "files" as const }
+];
+
+function validateMockHashTimers() {
+  const ids = [
+    statusSnapshot.head.hash_timer_id,
+    ...blockHashTimers,
+    ...roundStartTimers,
+    ...roundEndTimers,
+    ...mockTransactions.map((tx) => tx.hashTimer),
+    ...statusSnapshot.latest_rounds.flatMap((round) => [round.start_hash_timer_id, round.end_hash_timer_id]).filter(isPresent),
+    ...statusSnapshot.consensus.validators
+      .map((validator) => validator.last_seen_hash_timer)
+      .filter(isPresent),
+    ...ipndhtHandles.map((item) => item.hash_timer_id).filter(isPresent),
+    ...ipndhtFiles.map((item) => item.hash_timer_id).filter(isPresent)
+  ];
+
+  ids.forEach((id) => assertHashTimerId(id));
+}
+
+validateMockHashTimers();
 
 export function mockHashtimer(id: string): HashTimerDetail {
   const normalizedInput = id.trim() || statusSnapshot.head.hash_timer_id;
@@ -324,4 +364,21 @@ export function getFiles(): Promise<FileRecord[]> {
 
 export function getPeers(): Promise<PeersResponse> {
   return Promise.resolve({ source: "mock", peers });
+}
+
+export function getIpndht(): Promise<IpndhtResponse> {
+  const summary = {
+    handles: ipndhtHandles.length,
+    files: ipndhtFiles.length,
+    providers: ipndhtProviders.length,
+    peers: peers.length
+  };
+
+  return Promise.resolve({
+    source: "mock",
+    summary,
+    latest_handles: ipndhtHandles,
+    latest_files: ipndhtFiles,
+    providers: ipndhtProviders
+  });
 }

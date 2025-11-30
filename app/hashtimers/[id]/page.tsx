@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import CopyButton from "@/components/common/CopyButton";
 import JsonViewer from "@/components/common/JsonViewer";
+import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { formatTimestamp, shortenHash } from "@/lib/format";
@@ -40,7 +41,7 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
 
       <Card title="HashTimer overview" headerSlot={<CopyButton text={detail.hash_timer_id} label="Copy HashTimer" />}>
         <div className="space-y-2">
-          <p className="break-all font-mono text-lg text-emerald-100">{detail.hash_timer_id}</p>
+          <HashTimerValue id={detail.hash_timer_id} linkClassName="break-all font-mono text-lg text-emerald-100" />
           {detail.canonical_digest && (
             <p className="text-xs text-slate-400">Digest: {detail.canonical_digest}</p>
           )}
@@ -78,13 +79,11 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
         {parents.length ? (
           <div className="flex flex-wrap gap-2">
             {parents.map((parent) => (
-              <Link
+              <HashTimerValue
                 key={parent}
-                href={`/hashtimers/${parent}`}
-                className="rounded-full bg-slate-800/70 px-3 py-1 text-xs text-emerald-200 underline-offset-4 hover:underline"
-              >
-                {parent}
-              </Link>
+                id={parent}
+                linkClassName="rounded-full bg-slate-800/70 px-3 py-1 text-xs text-emerald-200 underline-offset-4 hover:underline"
+              />
             ))}
           </div>
         ) : (

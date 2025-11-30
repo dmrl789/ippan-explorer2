@@ -170,3 +170,28 @@ export type PeersResponse = {
   source: "rpc" | "mock";
   peers: PeerInfo[];
 };
+
+export type IpndhtHandle = {
+  handle: string;
+  owner?: string;
+  hash_timer_id?: string;
+};
+
+export type IpndhtFile = {
+  file_id: string;
+  size_bytes?: number;
+  hash_timer_id?: string;
+};
+
+export type IpndhtProvider = {
+  peer_id: string;
+  provides: "handles" | "files" | "both";
+};
+
+export type IpndhtResponse = {
+  source: "rpc" | "mock";
+  summary: { handles: number; files: number; providers: number; peers: number };
+  latest_handles: IpndhtHandle[];
+  latest_files: IpndhtFile[];
+  providers: IpndhtProvider[];
+};
