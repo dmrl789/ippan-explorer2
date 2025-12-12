@@ -14,6 +14,15 @@ import { fetchStatusWithSource } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
 import { fetchIpndht } from "@/lib/ipndht";
+import {
+  LABEL_LATEST_FINALIZED_HASHTIMER,
+  TIP_LATEST_FINALIZED_HASHTIMER,
+  LABEL_FINALIZED_ROUND_INDEX,
+  TIP_FINALIZED_ROUND_INDEX,
+  LABEL_IPPAN_TIME_MS,
+  LABEL_ROUND,
+  LABEL_IPPAN_TIME
+} from "@/lib/terminology";
 
 export default async function DashboardPage() {
   const [{ status, source: statusSource }, peers, ipndht] = await Promise.all([
@@ -43,8 +52,8 @@ export default async function DashboardPage() {
       />
 
       <Card
-        title="L1 head HashTimer"
-        description="Primary anchor for L1 navigation (HashTimer-first)"
+        title={LABEL_LATEST_FINALIZED_HASHTIMER}
+        description={TIP_LATEST_FINALIZED_HASHTIMER}
         headerSlot={<CopyButton text={status.head.hash_timer_id} label="Copy HashTimer" />}
       >
         <div className="flex flex-wrap items-center gap-3 text-base">
@@ -60,12 +69,12 @@ export default async function DashboardPage() {
         </div>
         <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-4">
           <DetailItem
-            label="IPPAN Time (ms)"
+            label={LABEL_IPPAN_TIME_MS}
             value={status.head.ippan_time_ms.toLocaleString()}
             secondary={`UTC ${formatMs(status.head.ippan_time_ms)}`}
           />
-          <DetailItem label="Round" value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
-          <DetailItem label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
+          <DetailItem label={LABEL_ROUND} value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
+          <DetailItem label={LABEL_FINALIZED_ROUND_INDEX} value={`#${status.head.block_height.toLocaleString()}`} />
           <DetailItem label="Finalized" value={status.head.finalized ? "Finalized" : "Pending"} />
         </div>
       </Card>
@@ -73,11 +82,11 @@ export default async function DashboardPage() {
       <Card title="Explore" description="Entry points for L1, IPNDHT, and L2 surfaces">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <FeatureCard
-            title="L1 chain view"
+            title="DAG blocks view"
             href={"/blocks" as Route}
             source={statusSource}
-            subtitle="Blocks + transactions"
-            value={`Block #${status.head.block_height.toLocaleString()}`}
+            subtitle="DAG blocks + transactions"
+            value={`${status.head.block_height.toLocaleString()} blocks observed`}
           />
           <FeatureCard
             title="Accounts & payments"
@@ -112,24 +121,24 @@ export default async function DashboardPage() {
             href={"/status" as Route}
             source={statusSource}
             subtitle="Operator + AI"
-            value={`Epoch ${status.live.current_epoch} · ${validatorsOnline ?? "—"} online`}
+            value={`${validatorsOnline ?? "—"} validators online`}
           />
         </div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card
-          title="L1 consensus snapshot"
-          description="Fields sourced from /status (no invented totals)"
+          title="Consensus snapshot"
+          description="Current IPPAN consensus state from /status"
           headerSlot={<SourceBadge source={statusSource} />}
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <DetailItem label="Round" value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
-            <DetailItem label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
+            <DetailItem label={LABEL_ROUND} value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
+            <DetailItem label={LABEL_FINALIZED_ROUND_INDEX} value={`#${status.head.block_height.toLocaleString()}`} />
             <DetailItem label="HashTimer seq" value={status.head.hash_timer_seq ?? "—"} />
-            <DetailItem label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
+            <DetailItem label={LABEL_IPPAN_TIME} value={formatMs(status.head.ippan_time_ms)} />
             <DetailItem label="Validators online" value={validatorsOnline !== undefined ? validatorsOnline.toLocaleString() : "—"} />
-            <DetailItem label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
+            <DetailItem label="Round time avg" value={`${status.live.round_time_avg_ms}ms`} />
           </div>
         </Card>
 

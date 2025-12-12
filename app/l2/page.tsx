@@ -5,6 +5,11 @@ import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchStatusWithSource } from "@/lib/status";
 import { fetchIpndht } from "@/lib/ipndht";
 import { L2_APPS, type L2App } from "@/lib/l2Config";
+import {
+  LABEL_ROUND,
+  LABEL_FINALIZED_ROUND_INDEX,
+  LABEL_IPPAN_TIME
+} from "@/lib/terminology";
 
 function categoryLabel(category: L2App["category"]) {
   switch (category) {
@@ -47,12 +52,12 @@ export default async function L2Page() {
         }
       />
 
-      <Card title="Current L1 context" description="Snapshot from /status" headerSlot={<SourceBadge source={statusSource} />}>
+      <Card title="Current IPPAN context" description="Consensus snapshot from /status" headerSlot={<SourceBadge source={statusSource} />}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Detail label="Round" value={(status.head.round_id ?? status.head.round_height) !== undefined ? `#${(status.head.round_id ?? status.head.round_height)!.toLocaleString()}` : "—"} />
-          <Detail label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
-          <Detail label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
-          <Detail label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
+          <Detail label={LABEL_ROUND} value={(status.head.round_id ?? status.head.round_height) !== undefined ? `#${(status.head.round_id ?? status.head.round_height)!.toLocaleString()}` : "—"} />
+          <Detail label={LABEL_FINALIZED_ROUND_INDEX} value={`#${status.head.block_height.toLocaleString()}`} />
+          <Detail label={LABEL_IPPAN_TIME} value={`${status.head.ippan_time_ms.toLocaleString()} ms`} />
+          <Detail label="Validators online" value={`${(status.live.validators_online ?? status.live.active_operators) ?? "—"}`} />
         </div>
       </Card>
 

@@ -9,6 +9,7 @@ import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { fetchTransactionDetail } from "@/lib/tx";
 import { formatAmount, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
+import { LABEL_TRANSACTION_HASHTIMER, LABEL_IPPAN_TIME_MS } from "@/lib/terminology";
 
 interface TransactionPageProps {
   params: { hash: string };
@@ -45,10 +46,10 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
           <Detail label="To" value={resolvedTx.to} />
           <Detail label="Amount" value={formatAmount(resolvedTx.amount)} hint={`${resolvedTx.amountAtomic} atomic`} />
           <Detail label="Fee" value={`${resolvedTx.fee} IPN`} />
-          <Detail label="IPPAN Time (ms)" value={txIppanMs.toLocaleString()} />
+          <Detail label={LABEL_IPPAN_TIME_MS} value={txIppanMs.toLocaleString()} />
           <Detail label="UTC" value={txIso} />
           <Detail
-            label="HashTimer"
+            label={LABEL_TRANSACTION_HASHTIMER}
             value={
               <HashTimerValue
                 id={resolvedTx.hashTimer}

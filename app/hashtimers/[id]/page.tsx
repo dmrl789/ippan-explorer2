@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { formatTimestamp, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 import type { HashTimerDetail } from "@/types/rpc";
+import { LABEL_IPPAN_TIME_MS, LABEL_ROUND, LABEL_FINALIZED_ROUND_INDEX } from "@/lib/terminology";
 
 interface HashTimerPageProps {
   params: { id: string };
@@ -57,14 +58,14 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
           )}
         </div>
         <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-3">
-          <Detail label="IPPAN Time (ms)" value={ippanMs !== undefined ? ippanMs.toLocaleString() : "—"} />
+          <Detail label={LABEL_IPPAN_TIME_MS} value={ippanMs !== undefined ? ippanMs.toLocaleString() : "—"} />
           <Detail label="UTC" value={ippanIso} />
           <Detail
-            label="Round height"
+            label={LABEL_ROUND}
             value={detail.round_height !== undefined ? `#${detail.round_height.toLocaleString()}` : "—"}
           />
           <Detail
-            label="Block height"
+            label={LABEL_FINALIZED_ROUND_INDEX}
             value={detail.block_height !== undefined ? `#${detail.block_height.toLocaleString()}` : "—"}
           />
         </div>
