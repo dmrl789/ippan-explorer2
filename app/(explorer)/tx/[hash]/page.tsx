@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import JsonViewer from "@/components/common/JsonViewer";
+import { SourceBadge } from "@/components/common/SourceBadge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
-import { getTransaction } from "@/lib/mockData";
+import { fetchTransactionDetail } from "@/lib/tx";
 import { formatAmount, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 
@@ -14,11 +15,11 @@ interface TransactionPageProps {
 }
 
 export default async function TransactionDetailPage({ params }: TransactionPageProps) {
-  const transaction = await getTransaction(params.hash);
-  if (!transaction) {
+  const { source, tx } = await fetchTransactionDetail(params.hash);
+  if (!tx) {
     notFound();
   }
-  const resolvedTx = transaction;
+  const resolvedTx = tx;
   const txIppanMs =
     resolvedTx.ippan_time_ms ??
     (resolvedTx.ippan_time_us
@@ -38,7 +39,7 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
         }
       />
 
-      <Card title="Transaction summary">
+      <Card title="Transaction summary" headerSlot={<SourceBadge source={source} />}>
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="From" value={resolvedTx.from} />
           <Detail label="To" value={resolvedTx.to} />

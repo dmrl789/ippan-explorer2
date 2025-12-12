@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchPeers } from "@/lib/peers";
+import { fetchIpndht } from "@/lib/ipndht";
 
 function formatLastSeen(ms?: number) {
   if (ms === undefined || ms === null) return "—";
@@ -15,13 +16,13 @@ function formatLastSeen(ms?: number) {
 }
 
 export default async function NetworkPage() {
-  const peerData = await fetchPeers();
+  const [peerData, ipndht] = await Promise.all([fetchPeers(), fetchIpndht()]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Network peers"
-        description="IPNDHT-facing peer set from /peers with mock fallback"
+        description="Peer inventory from /peers (plus IPNDHT context when available)"
         actions={
           <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
             ← Back to dashboard
@@ -38,6 +39,12 @@ export default async function NetworkPage() {
           <div>
             <p className="text-3xl font-semibold text-emerald-100">{peerData.peers.length}</p>
             <p className="text-xs uppercase tracking-wide text-slate-500">Peers discovered</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span>
+                DHT-enabled peers: <span className="font-semibold text-slate-200">{ipndht.summary.dht_peers_count ?? "—"}</span>
+              </span>
+              <SourceBadge source={ipndht.sections?.providers ?? ipndht.source} label="IPNDHT context" />
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link

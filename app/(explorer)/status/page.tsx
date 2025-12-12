@@ -1,26 +1,55 @@
 import JsonViewer from "@/components/common/JsonViewer";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SourceBadge } from "@/components/common/SourceBadge";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { getAiStatus, getHealthStatus } from "@/lib/mockData";
+import { fetchAiStatusWithSource } from "@/lib/ai";
+import { fetchHealthWithSource } from "@/lib/health";
+import { fetchStatusWithSource } from "@/lib/status";
 
 export default async function StatusPage() {
-  const [health, ai] = await Promise.all([getHealthStatus(), getAiStatus()]);
+  const [{ health, source: healthSource }, { ai, source: aiSource }, { status, source: statusSource }] = await Promise.all([
+    fetchHealthWithSource(),
+    fetchAiStatusWithSource(),
+    fetchStatusWithSource()
+  ]);
+  const roundId = status.head.round_id ?? status.head.round_height;
+  const validatorsOnline = status.live.validators_online ?? status.live.active_operators;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Node & AI Status" description="Consensus, storage, DHT, and AI health signals" />
+      <PageHeader title="Status" description="Operator / cluster view (health + consensus + AI), with mock fallback always badged" />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <StatusCard title="Consensus" healthy={health.consensus} detail="/health.consensus" />
-        <StatusCard title="Storage" healthy={health.storage} detail={health.rpc ? "RPC ready" : "RPC issue"} />
-        <StatusCard title="DHT files" healthy={health.dhtFile.healthy} detail={`Mode: ${health.dhtFile.mode}`} />
-        <StatusCard title="DHT handles" healthy={health.dhtHandle.healthy} detail={`Mode: ${health.dhtHandle.mode}`} />
-        <Card title="AI model" description="Status pulled from /ai/status">
+        <Card title="Node health" description="From /health" headerSlot={<SourceBadge source={healthSource} />}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <HealthRow label="Consensus" ok={health.consensus} detail="consensus" />
+            <HealthRow label="RPC" ok={health.rpc} detail="rpc" />
+            <HealthRow label="Storage" ok={health.storage} detail="storage" />
+            <HealthRow label="DHT files" ok={health.dhtFile.healthy} detail={`mode: ${health.dhtFile.mode}`} />
+            <HealthRow label="DHT handles" ok={health.dhtHandle.healthy} detail={`mode: ${health.dhtHandle.mode}`} />
+          </div>
+        </Card>
+
+        <Card title="Consensus snapshot" description="From /status" headerSlot={<SourceBadge source={statusSource} />}>
+          <div className="space-y-3 text-sm text-slate-200">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Finalized</span>
+              <StatusPill status={status.head.finalized ? "ok" : "warn"} />
+            </div>
+            <KeyValue label="Round" value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
+            <KeyValue label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
+            <KeyValue label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
+            <KeyValue label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
+            <KeyValue label="Validators online" value={validatorsOnline !== undefined ? validatorsOnline.toLocaleString() : "—"} />
+          </div>
+        </Card>
+
+        <Card title="AI status" description="From /ai/status" headerSlot={<SourceBadge source={aiSource} />}>
           <div className="space-y-2">
             <StatusPill status={ai.usingStub ? "warn" : "ok"} />
             <p className="text-sm text-slate-400">Model hash</p>
-            <p className="font-mono text-base text-slate-50">{ai.modelHash}</p>
+            <p className="font-mono text-base text-slate-50 break-all">{ai.modelHash}</p>
             <p className="text-xs text-slate-500">Mode: {ai.mode}</p>
           </div>
         </Card>
@@ -30,18 +59,35 @@ export default async function StatusPage() {
         <Card title="Raw /health JSON">
           <JsonViewer data={health} />
         </Card>
-        <Card title="Raw /ai/status JSON">
-          <JsonViewer data={ai} />
+        <Card title="Raw /status JSON">
+          <JsonViewer data={status} />
         </Card>
       </div>
+
+      <Card title="Raw /ai/status JSON">
+        <JsonViewer data={ai} />
+      </Card>
     </div>
   );
 }
 
-function StatusCard({ title, healthy, detail }: { title: string; healthy: boolean; detail?: string }) {
+function HealthRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
   return (
-    <Card title={title} description={detail}>
-      <StatusPill status={healthy ? "ok" : "error"} />
-    </Card>
+    <div className="flex items-center justify-between rounded-lg border border-slate-800/70 bg-slate-950/50 px-3 py-2">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+        {detail && <p className="text-xs text-slate-400">{detail}</p>}
+      </div>
+      <StatusPill status={ok ? "ok" : "error"} />
+    </div>
+  );
+}
+
+function KeyValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-slate-400">{label}</span>
+      <span className="font-semibold text-slate-100">{value}</span>
+    </div>
   );
 }

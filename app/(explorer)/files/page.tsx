@@ -1,31 +1,88 @@
 import Link from "next/link";
 import SimpleTable from "@/components/tables/SimpleTable";
+import FileSearchForm from "@/components/forms/FileSearchForm";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getFiles } from "@/lib/mockData";
+import { SourceBadge } from "@/components/common/SourceBadge";
+import { fetchIpndhtFiles } from "@/lib/files";
 
-export default async function FilesPage() {
-  const files = await getFiles();
+interface FilesPageProps {
+  searchParams?: { id?: string; owner?: string; tag?: string; query?: string };
+}
+
+function shorten(value: string, size = 10) {
+  if (!value) return value;
+  if (value.length <= size * 2) return value;
+  return `${value.slice(0, size)}…${value.slice(-size)}`;
+}
+
+export default async function FilesPage({ searchParams }: FilesPageProps) {
+  const { source, files } = await fetchIpndhtFiles();
+  const queryId = (searchParams?.id ?? searchParams?.query ?? "").trim();
+  const queryOwner = (searchParams?.owner ?? "").trim();
+  const queryTag = (searchParams?.tag ?? "").trim();
+
+  const filtered = files.filter((file) => {
+    if (queryId) {
+      const idMatch = file.id.toLowerCase().includes(queryId.toLowerCase()) || file.file_id?.toLowerCase().includes(queryId.toLowerCase());
+      if (!idMatch) return false;
+    }
+    if (queryOwner) {
+      if ((file.owner ?? "").toLowerCase() !== queryOwner.toLowerCase()) return false;
+    }
+    if (queryTag) {
+      const tags = (file.tags ?? []).map((tag) => tag.toLowerCase());
+      const doctype = typeof file.meta?.doctype === "string" ? file.meta.doctype.toLowerCase() : "";
+      const tagMatch = tags.includes(queryTag.toLowerCase()) || doctype === queryTag.toLowerCase() || doctype.includes(queryTag.toLowerCase());
+      if (!tagMatch) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Files" description="Inspect IPNDHT publications and artifacts" />
-      <Card title="Published files">
+      <PageHeader title="Files" description="Browse IPNDHT file descriptors (metadata only)" />
+
+      <Card
+        title="Filter"
+        description="Search by file id, owner address, or tag"
+        headerSlot={<SourceBadge source={source} />}
+      >
+        <FileSearchForm />
+      </Card>
+
+      <Card title="Published files" description={`${filtered.length.toLocaleString()} results`}>
         <SimpleTable
-          data={files}
+          data={filtered}
           columns={[
             {
               key: "id",
               header: "File",
               render: (row) => (
                 <Link href={`/files/${row.id}`} className="text-emerald-300">
-                  {row.id}
+                  {shorten(row.id)}
                 </Link>
               )
             },
-            { key: "owner", header: "Owner" },
-            { key: "size", header: "Size", render: (row) => `${(row.size / (1024 * 1024)).toFixed(2)} MB` },
-            { key: "mode", header: "Mode" }
+            {
+              key: "owner",
+              header: "Owner",
+              render: (row) =>
+                row.owner ? (
+                  <Link href={`/accounts/${row.owner}`} className="text-emerald-300 underline-offset-4 hover:underline">
+                    {shorten(row.owner)}
+                  </Link>
+                ) : (
+                  "—"
+                )
+            },
+            { key: "mime_type", header: "MIME", render: (row) => row.mime_type ?? "—" },
+            { key: "size_bytes", header: "Size", render: (row) => (typeof row.size_bytes === "number" ? `${row.size_bytes.toLocaleString()} B` : "—") },
+            { key: "availability", header: "Availability", render: (row) => row.availability ?? "—" },
+            { key: "dht_published", header: "DHT", render: (row) => (row.dht_published === true ? "Published" : row.dht_published === false ? "Not published" : "—") },
+            { key: "tags", header: "Tags", render: (row) => (row.tags?.length ? row.tags.join(", ") : row.meta?.doctype ? String(row.meta.doctype) : "—") }
           ]}
+          emptyMessage="No file descriptors found."
         />
       </Card>
     </div>

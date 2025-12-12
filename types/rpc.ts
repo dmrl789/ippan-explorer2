@@ -1,11 +1,4 @@
-export interface NetworkSummary {
-  consensusMode: "PoA" | "DLC";
-  lastFinalizedRound: number;
-  lastBlockId: string;
-  hashTimer: string;
-  tps: number;
-  activeValidators: number;
-}
+export type RpcSource = "rpc" | "mock";
 
 export interface AiStatus {
   modelHash: string;
@@ -80,6 +73,10 @@ export interface AccountSummary {
 }
 
 export interface PaymentEntry {
+  /**
+   * MOCK-ONLY (for now): the public L1 RPC may not expose account payment history yet.
+   * The UI must badge this section as mock unless backed by RPC.
+   */
   direction: "incoming" | "outgoing" | "self";
   amount: number;
   fee: number;
@@ -89,6 +86,10 @@ export interface PaymentEntry {
 }
 
 export interface HandleRecord {
+  /**
+   * NOTE: This is a legacy shape used by early mock pages.
+   * Prefer `IpndhtHandleRecord` for IPNDHT handle resolution.
+   */
   handle: string;
   owner: string;
   expiresAt: string;
@@ -96,6 +97,10 @@ export interface HandleRecord {
 }
 
 export interface FileRecord {
+  /**
+   * NOTE: This is a legacy shape used by early mock pages.
+   * Prefer `IpndhtFileDescriptor` for IPNDHT file descriptors.
+   */
   id: string;
   owner: string;
   size: number;
@@ -110,18 +115,30 @@ export type StatusResponseV1 = {
     ippan_time?: string;
     ippan_time_us?: string;
     ippan_time_ms: number;
-    round_height: number;
+    /**
+     * Preferred field name from current L1 RPC (if available).
+     * Some mocks/older payloads used `round_height` instead.
+     */
+    round_id?: number;
+    /**
+     * Legacy/mock compatibility: do not assume this exists on live RPC.
+     */
+    round_height?: number;
     block_height: number;
     finalized: boolean;
     hash_timer_seq?: string;
   };
-  counters: {
-    finalized_rounds: number;
-    transactions_total: number;
-    total_issuance: number;
-    accounts_total: number;
+  /**
+   * MOCK-ONLY (for now): these broad network totals are often not present on minimal L1 RPC.
+   * The dashboard must not display them unless the RPC truly provides them.
+   */
+  counters?: {
+    finalized_rounds?: number;
+    transactions_total?: number;
+    total_issuance?: number;
+    accounts_total?: number;
     holders_total?: number;
-    hash_timers_total: number;
+    hash_timers_total?: number;
     ai_requests_total?: number;
   };
   live: {
@@ -129,28 +146,39 @@ export type StatusResponseV1 = {
     finality_time_ms: number;
     current_epoch: number;
     epoch_progress_pct: number;
-    active_operators: number;
+    /**
+     * Preferred field name for "validators online" if present.
+     */
+    validators_online?: number;
+    /**
+     * Legacy/mock compatibility: do not assume this exists on live RPC.
+     */
+    active_operators?: number;
   };
-  latest_blocks: Array<{
+  /**
+   * Optional: a "recent activity" window some nodes provide on /status.
+   * If absent, the UI must show a placeholder and not invent history.
+   */
+  latest_blocks?: Array<{
     block_height: number;
     hash_timer_id: string;
-    round_height: number;
-    tx_count: number;
+    round_height?: number;
+    tx_count?: number;
     age_ms?: number;
     proposer?: string;
   }>;
-  latest_rounds: Array<{
+  latest_rounds?: Array<{
     round_height: number;
     finalized: boolean;
-    block_count: number;
-    tx_count: number;
-    finality_ms: number;
+    block_count?: number;
+    tx_count?: number;
+    finality_ms?: number;
     start_hash_timer_id?: string;
     end_hash_timer_id?: string;
   }>;
-  consensus: {
-    metrics_available: boolean;
-    validators: Array<{
+  consensus?: {
+    metrics_available?: boolean;
+    validators?: Array<{
       validator_id: string;
       uptime_ratio_7d?: number;
       validated_blocks_7d?: number;
@@ -175,19 +203,40 @@ export type PeerInfo = {
 };
 
 export type PeersResponse = {
-  source: "rpc" | "mock";
+  source: RpcSource;
   peers: PeerInfo[];
 };
 
-export type IpndhtHandle = {
+export type IpndhtHandleRecord = {
   handle: string;
   owner?: string;
+  expires_at?: string;
   hash_timer_id?: string;
 };
 
-export type IpndhtFile = {
-  file_id: string;
+export type IpndhtFileDescriptor = {
+  /**
+   * Canonical identifier (UI uses this). Some RPCs return this as `file_id`.
+   */
+  id: string;
+  file_id?: string;
+  owner?: string;
+  content_hash?: string;
   size_bytes?: number;
+  created_at?: string;
+  mime_type?: string;
+  availability?: string | number;
+  dht_published?: boolean;
+  tags?: string[];
+  /**
+   * Optional descriptor metadata (shape is RPC-defined).
+   * Commonly contains `doctype` for AI materials (ai_model, ai_dataset, ai_report).
+   */
+  meta?: Record<string, unknown> & { doctype?: string };
+  /**
+   * Optional retrieval hints (shape is RPC-defined). UI must warn users to verify `content_hash`.
+   */
+  retrieval?: Record<string, unknown>;
   hash_timer_id?: string;
 };
 
@@ -197,9 +246,30 @@ export type IpndhtProvider = {
 };
 
 export type IpndhtResponse = {
-  source: "rpc" | "mock";
-  summary: { handles: number; files: number; providers: number; peers: number };
-  latest_handles: IpndhtHandle[];
-  latest_files: IpndhtFile[];
+  source: RpcSource;
+  /**
+   * Optional per-section sources to keep mock-vs-RPC behavior obvious in the UI.
+   */
+  sections?: {
+    handles: RpcSource;
+    files: RpcSource;
+    providers: RpcSource;
+    peers: RpcSource;
+  };
+  summary: {
+    handles_count: number;
+    files_count: number;
+    providers_count?: number;
+    /**
+     * Peers observed in /peers (not necessarily DHT-enabled).
+     */
+    peers_count: number;
+    /**
+     * Optional: how many peers appear to advertise DHT participation.
+     */
+    dht_peers_count?: number;
+  };
+  latest_handles: IpndhtHandleRecord[];
+  latest_files: IpndhtFileDescriptor[];
   providers: IpndhtProvider[];
 };

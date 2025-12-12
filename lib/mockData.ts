@@ -1,3 +1,8 @@
+/**
+ * Mock fixtures used ONLY when `NEXT_PUBLIC_IPPAN_RPC_URL` is unset (or when an RPC call fails).
+ * All UI that uses these mocks MUST clearly show `SourceBadge: mock` so users never confuse demo
+ * data with live chain state.
+ */
 import type {
   AccountSummary,
   AiStatus,
@@ -6,13 +11,14 @@ import type {
   FileRecord,
   HandleRecord,
   HealthStatus,
-  NetworkSummary,
   PaymentEntry,
   PeerInfo,
   PeersResponse,
   StatusResponseV1,
   Transaction,
   HashTimerDetail,
+  IpndhtFileDescriptor,
+  IpndhtHandleRecord,
   IpndhtResponse
 } from "@/types/rpc";
 import { assertHashTimerId, isHashTimerId, makeMockHashTimer } from "@/lib/hashtimer";
@@ -81,6 +87,7 @@ const statusSnapshot: StatusResponseV1 = {
     ippan_time: new Date(nowMs).toISOString(),
     ippan_time_us: nowMicros.toString(),
     ippan_time_ms: nowMs,
+    round_id: 12034,
     round_height: 12034,
     block_height: Number(mockBlocks[0].id),
     finalized: true,
@@ -100,6 +107,7 @@ const statusSnapshot: StatusResponseV1 = {
     finality_time_ms: 1800,
     current_epoch: 12,
     epoch_progress_pct: 64.5,
+    validators_online: 17,
     active_operators: 18
   },
   latest_blocks: mockBlocks.map((block, index) => ({
@@ -124,43 +132,16 @@ const statusSnapshot: StatusResponseV1 = {
     validators: [
       {
         validator_id: "validator-1",
-        uptime_ratio_7d: 0.995,
-        validated_blocks_7d: 420,
-        missed_blocks_7d: 2,
-        avg_latency_ms: 220,
-        slashing_events_90d: 0,
-        stake_normalized: 0.24,
-        peer_reports_quality: 0.91,
-        fairness_score: 0.88,
-        reward_weight: 0.31,
         status: "active",
         last_seen_hash_timer: blockHashTimers[1]
       },
       {
         validator_id: "validator-2",
-        uptime_ratio_7d: 0.982,
-        validated_blocks_7d: 398,
-        missed_blocks_7d: 7,
-        avg_latency_ms: 340,
-        slashing_events_90d: 1,
-        stake_normalized: 0.18,
-        peer_reports_quality: 0.76,
-        fairness_score: 0.81,
-        reward_weight: 0.26,
         status: "active",
         last_seen_hash_timer: blockHashTimers[2]
       },
       {
         validator_id: "validator-3",
-        uptime_ratio_7d: 0.968,
-        validated_blocks_7d: 361,
-        missed_blocks_7d: 12,
-        avg_latency_ms: 415,
-        slashing_events_90d: 0,
-        stake_normalized: 0.12,
-        peer_reports_quality: 0.7,
-        fairness_score: 0.78,
-        reward_weight: 0.22,
         status: "syncing",
         last_seen_hash_timer: blockHashTimers[3]
       }
@@ -226,34 +207,59 @@ const peers: PeerInfo[] = [
   }
 ];
 
-const ipndhtHandles = [
+const ipndhtFileDescriptors: IpndhtFileDescriptor[] = [
   {
-    handle: "@ippan.ai",
+    id: "model-fairness-gbdt-v1",
     owner: accountSummary.address,
-    hash_timer_id: makeMockHashTimer("handle-ippan", microsAgo(45000))
+    content_hash: "b3:mockcontenthash-model-fairness-gbdt-v1",
+    size_bytes: 18_234_112,
+    created_at: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+    mime_type: "application/octet-stream",
+    availability: "seeded",
+    dht_published: true,
+    tags: ["ai_model", "fairness"],
+    meta: { doctype: "ai_model", name: "D-GBDT fairness model v1" },
+    retrieval: { uris: ["https://example.invalid/ipndht/model-fairness-gbdt-v1"] }
   },
   {
-    handle: "@ai.models",
+    id: "dataset-infolaw-mini-2025-12",
     owner: "0xAccount000000000000000000000000000000000999",
-    hash_timer_id: makeMockHashTimer("handle-aimodels", microsAgo(76000))
+    content_hash: "b3:mockcontenthash-dataset-infolaw-mini",
+    size_bytes: 5_804_991,
+    created_at: new Date(now.getTime() - 5 * 60 * 60 * 1000).toISOString(),
+    mime_type: "application/json",
+    availability: "replicated",
+    dht_published: true,
+    tags: ["ai_dataset", "legal"],
+    meta: { doctype: "ai_dataset", name: "InfoLAW mini dataset (demo)" },
+    retrieval: { uris: ["https://example.invalid/ipndht/dataset-infolaw-mini-2025-12.json"] }
   },
   {
-    handle: "@node.operator",
+    id: "report-fairness-audit-001",
     owner: accountSummary.address,
-    hash_timer_id: makeMockHashTimer("handle-operator", microsAgo(105000))
+    content_hash: "b3:mockcontenthash-report-fairness-audit-001",
+    size_bytes: 240_120,
+    created_at: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+    mime_type: "text/markdown",
+    availability: "seeded",
+    dht_published: false,
+    tags: ["ai_report", "fairness"],
+    meta: { doctype: "ai_report", name: "Fairness audit report #001 (demo)" }
   }
 ];
 
-const ipndhtFiles = [
+const ipndhtHandleRecords: IpndhtHandleRecord[] = [
   {
-    file_id: "file-01",
-    size_bytes: files[0].size,
-    hash_timer_id: makeMockHashTimer("file-01", microsAgo(60000))
+    handle: "@ippan.ai",
+    owner: accountSummary.address,
+    expires_at: new Date(now.getTime() + 86400000 * 90).toISOString(),
+    hash_timer_id: makeMockHashTimer("handle-ippan", microsAgo(45000))
   },
   {
-    file_id: "model-weights-v2",
-    size_bytes: 1024 * 1024 * 22,
-    hash_timer_id: makeMockHashTimer("file-weights", microsAgo(89000))
+    handle: "@ai.models.ipn",
+    owner: "0xAccount000000000000000000000000000000000999",
+    expires_at: new Date(now.getTime() + 86400000 * 30).toISOString(),
+    hash_timer_id: makeMockHashTimer("handle-aimodels", microsAgo(76000))
   }
 ];
 
@@ -264,18 +270,18 @@ const ipndhtProviders = [
 ];
 
 function validateMockHashTimers() {
+  const latestRounds = statusSnapshot.latest_rounds ?? [];
+  const validators = statusSnapshot.consensus?.validators ?? [];
   const ids = [
     statusSnapshot.head.hash_timer_id,
     ...blockHashTimers,
     ...roundStartTimers,
     ...roundEndTimers,
     ...mockTransactions.map((tx) => tx.hashTimer),
-    ...statusSnapshot.latest_rounds.flatMap((round) => [round.start_hash_timer_id, round.end_hash_timer_id]).filter(isPresent),
-    ...statusSnapshot.consensus.validators
-      .map((validator) => validator.last_seen_hash_timer)
-      .filter(isPresent),
-    ...ipndhtHandles.map((item) => item.hash_timer_id).filter(isPresent),
-    ...ipndhtFiles.map((item) => item.hash_timer_id).filter(isPresent)
+    ...latestRounds.flatMap((round) => [round.start_hash_timer_id, round.end_hash_timer_id]).filter(isPresent),
+    ...validators.map((validator) => validator.last_seen_hash_timer).filter(isPresent),
+    ...ipndhtHandleRecords.map((item) => item.hash_timer_id).filter(isPresent),
+    ...ipndhtFileDescriptors.map((item) => item.hash_timer_id).filter(isPresent)
   ];
 
   ids.forEach((id) => assertHashTimerId(id));
@@ -302,7 +308,7 @@ export function mockHashtimer(id: string): HashTimerDetail {
     ippan_time_us: microsValue.toString(),
     ippan_time_ms: ippanMs,
     round_height:
-      relatedBlock && statusSnapshot.latest_blocks.find((b) => b.hash_timer_id === relatedBlock.hashTimer)?.round_height,
+      relatedBlock && (statusSnapshot.latest_blocks ?? []).find((b) => b.hash_timer_id === relatedBlock.hashTimer)?.round_height,
     block_height: relatedBlock ? Number(relatedBlock.id) : undefined,
     tx_ids: relatedTxs.map((tx) => tx.hash),
     tx_count: relatedTxs.length || undefined,
@@ -313,17 +319,6 @@ export function mockHashtimer(id: string): HashTimerDetail {
 
 export function getHashTimerDetail(id: string): Promise<HashTimerDetail> {
   return Promise.resolve(mockHashtimer(id));
-}
-
-export function getNetworkSummary(): Promise<NetworkSummary> {
-  return Promise.resolve({
-    consensusMode: "PoA",
-    lastFinalizedRound: 12034,
-    lastBlockId: mockBlocks[0].id,
-    hashTimer: mockBlocks[0].hashTimer,
-    tps: 42,
-    activeValidators: 18
-  });
 }
 
 export function getStatus(): Promise<StatusResponseV1> {
@@ -389,18 +384,18 @@ export function getPeers(): Promise<PeersResponse> {
 }
 
 export function getIpndht(): Promise<IpndhtResponse> {
-  const summary = {
-    handles: ipndhtHandles.length,
-    files: ipndhtFiles.length,
-    providers: ipndhtProviders.length,
-    peers: peers.length
-  };
-
   return Promise.resolve({
     source: "mock",
-    summary,
-    latest_handles: ipndhtHandles,
-    latest_files: ipndhtFiles,
+    sections: { handles: "mock", files: "mock", providers: "mock", peers: "mock" },
+    summary: {
+      handles_count: ipndhtHandleRecords.length,
+      files_count: ipndhtFileDescriptors.length,
+      providers_count: ipndhtProviders.length,
+      peers_count: peers.length,
+      dht_peers_count: ipndhtProviders.length
+    },
+    latest_handles: ipndhtHandleRecords,
+    latest_files: ipndhtFileDescriptors,
     providers: ipndhtProviders
   });
 }
