@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { fetchAiStatusWithSource } from "@/lib/ai";
 import { fetchHealthWithSource } from "@/lib/health";
 import { fetchStatusWithSource } from "@/lib/status";
+import { LABEL_FINALIZED_ROUND_INDEX, LABEL_IPPAN_TIME } from "@/lib/terminology";
 
 export default async function StatusPage() {
   const [{ health, source: healthSource }, { ai, source: aiSource }, { status, source: statusSource }] = await Promise.all([
@@ -13,7 +14,8 @@ export default async function StatusPage() {
     fetchAiStatusWithSource(),
     fetchStatusWithSource()
   ]);
-  const roundId = status.head.round_id ?? status.head.round_height;
+  const observedRoundId = status.head.round_id ?? status.head.round_height;
+  const finalizedRoundIndex = status.counters?.finalized_rounds;
   const validatorsOnline = status.live.validators_online ?? status.live.active_operators;
 
   return (
@@ -37,11 +39,17 @@ export default async function StatusPage() {
               <span className="text-slate-400">Finalized</span>
               <StatusPill status={status.head.finalized ? "ok" : "warn"} />
             </div>
-            <KeyValue label="Round" value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
-            <KeyValue label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
-            <KeyValue label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
-            <KeyValue label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
+            <KeyValue label={LABEL_IPPAN_TIME} value={status.head.ippan_time_ms !== undefined ? status.head.ippan_time_ms.toLocaleString() : "—"} />
+            <KeyValue
+              label={LABEL_FINALIZED_ROUND_INDEX}
+              value={finalizedRoundIndex !== undefined ? `#${finalizedRoundIndex.toLocaleString()}` : "—"}
+            />
+            <KeyValue label="Observed round (local)" value={observedRoundId !== undefined ? `#${observedRoundId.toLocaleString()}` : "—"} />
+            <KeyValue label="DAG blocks observed (local)" value={`#${status.head.block_height.toLocaleString()}`} />
             <KeyValue label="Validators online" value={validatorsOnline !== undefined ? validatorsOnline.toLocaleString() : "—"} />
+            <p className="text-xs text-slate-500">
+              Local counters reflect this explorer’s RPC node view; IPPAN finality is tracked by rounds (not a global block height).
+            </p>
           </div>
         </Card>
 
