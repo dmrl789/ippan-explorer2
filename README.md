@@ -1,6 +1,12 @@
 # IPPAN Explorer
 
-A modern Next.js + Tailwind CSS explorer for the IPPAN network. The app surfaces the most important RPC data in a clean dashboard: network and AI status, block + transaction details, accounts with payment history, handle + file lookups, and operator health panels.
+A modern Next.js + Tailwind CSS explorer for the IPPAN network. The explorer is designed to be a truthful “front door” to L1 + IPNDHT + L2 modules: it shows what the current RPC exposes, and clearly badges mock fallback data when running without an RPC URL.
+
+## What this explorer shows
+
+- **L1 (consensus + chain)**: `/status` snapshot, blocks, transactions, accounts.
+- **IPNDHT (files + handles + providers)**: file descriptors, handle resolution, and (when available) provider/peer context.
+- **AI / L2 modules**: a high-level launchpad for L2 surfaces (AI fairness scoring, InfoLAW, etc.) derived from **L1 status + IPNDHT descriptors**, without inventing its own state.
 
 ## Getting started
 
@@ -9,23 +15,36 @@ npm install
 npm run dev
 ```
 
-The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL`. For local development you can point it to `http://localhost:8080`; in production the explorer runs in mock mode when the variable is unset so UI links never point at localhost.
+## RPC / mock behavior (`NEXT_PUBLIC_IPPAN_RPC_URL`)
+
+The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL`.
+
+- **When set**: pages will fetch real RPC where possible, with **mock fallback only when an endpoint is missing or errors**.
+- **When unset**: the explorer runs in a **mock-only demo mode**, and major sections are clearly badged as `"mock"` using `SourceBadge`.
+
+For local development you can point it to `http://localhost:8080`; in production, leaving it unset avoids UI links pointing at localhost.
 
 ## Pages
 
-- `/` – Global dashboard with network, AI, health and recent activity, plus IPPAN feature shortcuts.
-- `/network` – Peer inventory from `/peers` with mock fallback and IPNDHT context.
-- `/ipndht` – Aggregated IPNDHT view with handles, files, providers, and peer counts.
+- `/` – Dashboard: truthful L1 snapshot + peers + IPNDHT + links to L2.
 - `/blocks` – Latest blocks, plus `/blocks/[id]` for block details + transactions.
 - `/tx/[hash]` – Transaction detail + raw JSON view.
-- `/accounts/[address]` – Account overview with balance, nonce and paginated payments.
-- `/handles` – Search for `@handle.ipn` records.
-- `/files` – List of files with `/files/[id]` for descriptor detail.
-- `/status` – Operator status cards combining `/health` and `/ai/status`.
+- `/accounts` – Landing page with examples.
+- `/accounts/[address]` – Account overview (payments may be mock if RPC doesn’t expose history yet).
+- `/ipndht` – IPNDHT overview: counts + recent file descriptors + recent handles (RPC-backed, mock fallback).
+- `/files` – Browse IPNDHT file descriptors with filters (`id`, `owner`, `tag`); `/files/[id]` shows descriptor detail + raw JSON.
+- `/handles` – Search for `@handle.ipn` records and resolve to an owner (with source badge).
+- `/network` – Peer inventory from `/peers`, with IPNDHT context when available.
+- `/status` – Operator/cluster view combining `/health`, `/status`, and `/ai/status`.
+- `/l2` – L2 modules list driven by config + IPNDHT tag footprint (no invented state).
 
 ## HashTimer spec
 
 HashTimers follow the IPPAN format: a 64-character lowercase hexadecimal string with no prefix, shaped as `<14-hex time prefix><50-hex BLAKE3 hash>`. The explorer enforces this canonical format across mocks and UI rendering: invalid values get a red badge, and mock HashTimers are generated in `lib/hashtimer.ts` to stay spec-compliant.
+
+## L2 hooks on L1
+
+This explorer treats L2 as **surfaces anchored on L1**: it lists L2 modules and shows their footprint by looking at **IPNDHT descriptors (tags/meta), account ownership, and `/status` signals**. It does not fabricate “L2 chain state” that the RPC doesn’t expose.
 
 ## Network + IPNDHT features
 

@@ -8,7 +8,6 @@ import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Stat } from "@/components/ui/Stat";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { formatMs } from "@/lib/ippanTime";
 import { fetchStatusWithSource } from "@/lib/status";
@@ -23,12 +22,14 @@ export default async function DashboardPage() {
     fetchIpndht()
   ]);
   const rpcBase = getRpcBaseUrl();
+  const roundId = status.head.round_id ?? status.head.round_height;
+  const validatorsOnline = status.live.validators_online ?? status.live.active_operators;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="HashTimer dashboard"
-        description="HashTimer-first explorer view with live consensus, readiness, and validator metrics"
+        title="Dashboard"
+        description="Truthful L1 snapshot + IPNDHT + L2 launchpad (mock fallback is always badged)"
         actions={
           <a
             href={rpcBase ? `${rpcBase}/status` : "/api/status"}
@@ -42,8 +43,8 @@ export default async function DashboardPage() {
       />
 
       <Card
-        title="Head HashTimer"
-        description="Primary anchor for navigation and export"
+        title="L1 head HashTimer"
+        description="Primary anchor for L1 navigation (HashTimer-first)"
         headerSlot={<CopyButton text={status.head.hash_timer_id} label="Copy HashTimer" />}
       >
         <div className="flex flex-wrap items-center gap-3 text-base">
@@ -63,108 +64,123 @@ export default async function DashboardPage() {
             value={status.head.ippan_time_ms.toLocaleString()}
             secondary={`UTC ${formatMs(status.head.ippan_time_ms)}`}
           />
-          <DetailItem label="Round height" value={`#${status.head.round_height.toLocaleString()}`} />
+          <DetailItem label="Round" value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
           <DetailItem label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
           <DetailItem label="Finalized" value={status.head.finalized ? "Finalized" : "Pending"} />
         </div>
       </Card>
 
-      <Card title="IPPAN features" description="Fast links into HashTimers, IPNDHT, peers, and operator/AI status">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <Card title="Explore" description="Entry points for L1, IPNDHT, and L2 surfaces">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <FeatureCard
-            title="HashTimer"
-            href={`/hashtimers/${status.head.hash_timer_id}` as Route}
+            title="L1 chain view"
+            href={"/blocks" as Route}
             source={statusSource}
-            subtitle="Head anchor"
-            value={<HashTimerValue id={status.head.hash_timer_id} short />}
+            subtitle="Blocks + transactions"
+            value={`Block #${status.head.block_height.toLocaleString()}`}
+          />
+          <FeatureCard
+            title="Accounts & payments"
+            href={"/accounts" as Route}
+            source={statusSource}
+            subtitle="Lookup by address"
+            value="Try: 0x…"
           />
           <FeatureCard
             title="IPNDHT"
             href={"/ipndht" as Route}
             source={ipndht.source}
             subtitle="Handles + Files + Providers"
-            value={`${ipndht.summary.handles} handles · ${ipndht.summary.files} files`}
+            value={`${ipndht.summary.handles_count} handles · ${ipndht.summary.files_count} files`}
           />
           <FeatureCard
-            title="Network peers"
+            title="Network"
             href={"/network" as Route}
             source={peers.source}
-            subtitle="Libp2p view"
+            subtitle="Peer inventory"
             value={`${peers.peers.length.toLocaleString()} peers`}
           />
           <FeatureCard
-            title="Operator + AI status"
+            title="L2 modules"
+            href={"/l2" as Route}
+            source={ipndht.source}
+            subtitle="AI + InfoLAW + more"
+            value="View modules"
+          />
+          <FeatureCard
+            title="Status"
             href={"/status" as Route}
             source={statusSource}
-            subtitle="/status JSON"
-            value={`Epoch ${status.live.current_epoch} · ${status.live.active_operators} active`}
+            subtitle="Operator + AI"
+            value={`Epoch ${status.live.current_epoch} · ${validatorsOnline ?? "—"} online`}
           />
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Finalized rounds" value={formatNumber(status.counters.finalized_rounds)} />
-        <Stat label="Transactions" value={formatNumber(status.counters.transactions_total)} />
-        <Stat label="Issuance" value={`${formatNumber(status.counters.total_issuance)} IPN`} />
-        <Stat
-          label="Accounts"
-          value={formatNumber(status.counters.accounts_total)}
-          hint={status.counters.holders_total ? `${formatNumber(status.counters.holders_total)} holders` : undefined}
-        />
-        <Stat label="HashTimers" value={formatNumber(status.counters.hash_timers_total)} />
-        <Stat
-          label="AI requests"
-          value={status.counters.ai_requests_total ? formatNumber(status.counters.ai_requests_total) : "—"}
-          hint="From /ai/status"
-        />
-      </div>
-
-      <Card title="Live network" description="Consensus tempo and operator activity">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <DetailItem label="Avg round time" value={formatMsValue(status.live.round_time_avg_ms)} />
-          <DetailItem label="Finality time" value={formatMsValue(status.live.finality_time_ms)} />
-          <DetailItem label="Current epoch" value={`Epoch ${status.live.current_epoch}`} />
-          <DetailItem label="Active operators" value={formatNumber(status.live.active_operators)} />
-        </div>
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Epoch progress</span>
-            <span>{status.live.epoch_progress_pct}%</span>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card
+          title="L1 consensus snapshot"
+          description="Fields sourced from /status (no invented totals)"
+          headerSlot={<SourceBadge source={statusSource} />}
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailItem label="Round" value={roundId !== undefined ? `#${roundId.toLocaleString()}` : "—"} />
+            <DetailItem label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
+            <DetailItem label="HashTimer seq" value={status.head.hash_timer_seq ?? "—"} />
+            <DetailItem label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
+            <DetailItem label="Validators online" value={validatorsOnline !== undefined ? validatorsOnline.toLocaleString() : "—"} />
+            <DetailItem label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
           </div>
-          <div className="h-2 rounded-full bg-slate-800">
-            <div
-              className="h-2 rounded-full bg-emerald-500"
-              style={{ width: `${Math.min(Math.max(status.live.epoch_progress_pct, 0), 100)}%` }}
+        </Card>
+
+        <Card
+          title="Network peers"
+          description="Peer inventory from /peers"
+          headerSlot={<SourceBadge source={peers.source} />}
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailItem label="Total peers" value={peers.peers.length.toLocaleString()} />
+            <DetailItem
+              label="Last-seen field"
+              value={peers.peers.some((peer) => typeof peer.last_seen_ms === "number") ? "Available" : "—"}
             />
           </div>
-        </div>
-      </Card>
+        </Card>
+
+        <Card
+          title="IPNDHT"
+          description="Files + handles registered against IPNDHT"
+          headerSlot={<SourceBadge source={ipndht.source} />}
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DetailItem label="Files" value={ipndht.summary.files_count.toLocaleString()} />
+            <DetailItem label="Handles" value={ipndht.summary.handles_count.toLocaleString()} />
+            <DetailItem
+              label="Providers"
+              value={ipndht.summary.providers_count !== undefined ? ipndht.summary.providers_count.toLocaleString() : "—"}
+            />
+            <DetailItem label="DHT peers" value={ipndht.summary.dht_peers_count !== undefined ? ipndht.summary.dht_peers_count.toLocaleString() : "—"} />
+          </div>
+        </Card>
+      </div>
 
       <Suspense fallback={<div className="h-32 rounded-lg border border-slate-800/70 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">Loading graphs…</div>}>
         <DashboardGraphs status={status} peersCount={peers.peers.length} />
       </Suspense>
 
       <Card
-        title="Network activity"
-        description="Blocks, rounds, and validator dataset columns keyed by HashTimer"
-        headerSlot={<p className="text-xs text-slate-500">Server-fetched with mock fallback</p>}
+        title="Recent activity"
+        description="Latest blocks/rounds/validators if your /status endpoint provides them"
+        headerSlot={<SourceBadge source={statusSource} />}
       >
         <StatusDataTabs
           blocks={status.latest_blocks}
           rounds={status.latest_rounds}
-          validators={status.consensus.validators}
+          validators={status.consensus?.validators}
         />
       </Card>
     </div>
   );
-}
-
-function formatNumber(value: number) {
-  return value.toLocaleString();
-}
-
-function formatMsValue(value: number) {
-  return `${value.toLocaleString()} ms`;
 }
 
 function DetailItem({

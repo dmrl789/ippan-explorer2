@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import SimpleTable from "@/components/tables/SimpleTable";
 import JsonViewer from "@/components/common/JsonViewer";
+import { SourceBadge } from "@/components/common/SourceBadge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
-import { getBlockById } from "@/lib/mockData";
+import { fetchBlockDetail } from "@/lib/blocks";
 import { formatAmount, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 
@@ -14,7 +15,7 @@ interface BlockDetailPageProps {
 }
 
 export default async function BlockDetailPage({ params }: BlockDetailPageProps) {
-  const block = await getBlockById(params.id);
+  const { source, block } = await fetchBlockDetail(params.id);
   if (!block) {
     notFound();
   }
@@ -38,7 +39,7 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
         }
       />
 
-      <Card title="Block header">
+      <Card title="Block header" headerSlot={<SourceBadge source={source} />}>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <div>

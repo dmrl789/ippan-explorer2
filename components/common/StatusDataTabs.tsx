@@ -9,9 +9,9 @@ import { isHashTimerId, shortHashTimer } from "@/lib/hashtimer";
 import type { StatusResponseV1 } from "@/types/rpc";
 
 interface StatusDataTabsProps {
-  blocks: StatusResponseV1["latest_blocks"];
-  rounds: StatusResponseV1["latest_rounds"];
-  validators: StatusResponseV1["consensus"]["validators"];
+  blocks?: NonNullable<StatusResponseV1["latest_blocks"]>;
+  rounds?: NonNullable<StatusResponseV1["latest_rounds"]>;
+  validators?: NonNullable<NonNullable<StatusResponseV1["consensus"]>["validators"]>;
 }
 
 function formatPercent(value?: number, digits = 1) {
@@ -61,6 +61,9 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
   ];
 
   const [activeTab, setActiveTab] = useState(tabs[0].id);
+  const blocksToShow = blocks ?? [];
+  const roundsToShow = rounds ?? [];
+  const validatorsToShow = validators ?? [];
 
   return (
     <div className="space-y-3">
@@ -68,7 +71,7 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
 
       {activeTab === "blocks" && (
         <SimpleTable
-          data={blocks}
+          data={blocksToShow}
           columns={[
             { key: "block_height", header: "Block", render: (row) => `#${row.block_height.toLocaleString()}` },
             { key: "hash_timer_id", header: "HashTimer", render: (row) => <HashTimerValue id={row.hash_timer_id} short /> },
@@ -77,12 +80,13 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
             { key: "age_ms", header: "Age", render: (row) => formatAge(row.age_ms) },
             { key: "proposer", header: "Proposer", render: (row) => row.proposer ?? "—" }
           ]}
+          emptyMessage="Not provided by /status yet."
         />
       )}
 
       {activeTab === "rounds" && (
         <SimpleTable
-          data={rounds}
+          data={roundsToShow}
           columns={[
             { key: "round_height", header: "Round" },
             { key: "finalized", header: "Finalized", render: (row) => (row.finalized ? "Yes" : "Pending") },
@@ -95,12 +99,13 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
               render: (row) => renderHashTimerSpan(row.start_hash_timer_id, row.end_hash_timer_id)
             }
           ]}
+          emptyMessage="Not provided by /status yet."
         />
       )}
 
       {activeTab === "validators" && (
         <SimpleTable
-          data={validators}
+          data={validatorsToShow}
           columns={[
             { key: "validator_id", header: "Validator" },
             { key: "uptime_ratio_7d", header: "Uptime (7d)", render: (row) => formatPercent(row.uptime_ratio_7d, 2) },
@@ -114,6 +119,7 @@ export default function StatusDataTabs({ blocks, rounds, validators }: StatusDat
             { key: "reward_weight", header: "Reward weight", render: (row) => formatPercent(row.reward_weight) },
             { key: "status", header: "Status", render: (row) => row.status ?? "—" }
           ]}
+          emptyMessage="Not provided by /status yet."
         />
       )}
     </div>

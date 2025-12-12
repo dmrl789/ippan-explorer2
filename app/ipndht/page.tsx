@@ -3,16 +3,17 @@ import SimpleTable from "@/components/tables/SimpleTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
-import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { fetchIpndht } from "@/lib/ipndht";
 
 function formatSize(bytes?: number) {
   if (bytes === undefined || bytes === null) return "—";
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) return `${bytes.toLocaleString()} B`;
   const kb = bytes / 1024;
   if (kb < 1024) return `${kb.toFixed(1)} KB`;
   const mb = kb / 1024;
-  return `${mb.toFixed(1)} MB`;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
 }
 
 export default async function IpndhtPage() {
@@ -22,7 +23,7 @@ export default async function IpndhtPage() {
     <div className="space-y-6">
       <PageHeader
         title="IPNDHT overview"
-        description="Handles, files, and provider announcements with mock fallback"
+        description="Explore IPNDHT handles + file descriptors (RPC-backed, mock fallback)"
         actions={
           <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
             ← Back to dashboard
@@ -31,61 +32,125 @@ export default async function IpndhtPage() {
       />
 
       <Card
-        title="Registry summary"
-        description="Aggregated counts sourced from RPC where available"
+        title="Source"
+        description="Data from /api/ipndht (RPC-backed, mock fallback)"
         headerSlot={<SourceBadge source={data.source} />}
       >
+        <div className="flex flex-wrap gap-2">
+          <SourceBadge source={data.sections?.handles ?? data.source} label={`Handles: ${data.sections?.handles === "rpc" ? "RPC" : "Mock"}`} />
+          <SourceBadge source={data.sections?.files ?? data.source} label={`Files: ${data.sections?.files === "rpc" ? "RPC" : "Mock"}`} />
+          <SourceBadge source={data.sections?.providers ?? "mock"} label={`Providers: ${data.sections?.providers === "rpc" ? "RPC" : "Mock"}`} />
+          <SourceBadge source={data.sections?.peers ?? "mock"} label={`Peers: ${data.sections?.peers === "rpc" ? "RPC" : "Mock"}`} />
+        </div>
+      </Card>
+
+      <Card
+        title="Summary stats"
+        description="High-level footprint of IPNDHT on L1"
+        headerSlot={<SourceBadge source={data.source} label={data.source === "rpc" ? "Live" : "Mock"} />}
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryStat label="Handles" value={data.summary.handles} />
-          <SummaryStat label="Files" value={data.summary.files} />
-          <SummaryStat label="Providers" value={data.summary.providers} />
-          <SummaryStat label="Peers" value={data.summary.peers} />
+          <SummaryStat label="Files" value={data.summary.files_count} />
+          <SummaryStat label="Handles" value={data.summary.handles_count} />
+          <SummaryStat
+            label="Providers"
+            value={data.summary.providers_count}
+            hint={data.summary.providers_count === undefined ? "Not exposed by RPC" : undefined}
+          />
+          <SummaryStat
+            label="DHT-enabled peers"
+            value={data.summary.dht_peers_count}
+            hint={data.summary.dht_peers_count === undefined ? "Not exposed by RPC" : undefined}
+          />
         </div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card
-          title="Latest handles"
-          description="Recent handle publications with optional HashTimer anchors"
-          headerSlot={<Link href="/handles" className="text-xs text-emerald-300 underline-offset-4 hover:underline">View handles</Link>}
+          title="Recent handles"
+          description="Resolve @handle.ipn to owners and expiry"
+          headerSlot={
+            <Link href="/handles" className="text-xs text-emerald-300 underline-offset-4 hover:underline">
+              Search handles
+            </Link>
+          }
         >
           <SimpleTable
             data={data.latest_handles}
             columns={[
-              { key: "handle", header: "Handle" },
-              { key: "owner", header: "Owner", render: (row) => row.owner ?? "—" },
               {
-                key: "hash_timer_id",
-                header: "HashTimer",
-                render: (row) => (row.hash_timer_id ? <HashTimerValue id={row.hash_timer_id} short /> : "—")
-              }
+                key: "handle",
+                header: "Handle",
+                render: (row) => (
+                  <Link href={`/handles?query=${encodeURIComponent(row.handle)}`} className="text-emerald-300 underline-offset-4 hover:underline">
+                    {row.handle}
+                  </Link>
+                )
+              },
+              {
+                key: "owner",
+                header: "Owner",
+                render: (row) =>
+                  row.owner ? (
+                    <Link href={`/accounts/${row.owner}`} className="text-emerald-300 underline-offset-4 hover:underline">
+                      {row.owner}
+                    </Link>
+                  ) : (
+                    "—"
+                  )
+              },
+              { key: "expires_at", header: "Expires", render: (row) => row.expires_at ?? "—" }
             ]}
+            emptyMessage="No handle data available."
           />
         </Card>
 
         <Card
-          title="Latest files"
-          description="Recent files registered against the IPNDHT layer"
-          headerSlot={<Link href="/files" className="text-xs text-emerald-300 underline-offset-4 hover:underline">View files</Link>}
+          title="Recent files"
+          description="Latest file descriptors (metadata only; clients must verify content hashes)"
+          headerSlot={
+            <Link href="/files" className="text-xs text-emerald-300 underline-offset-4 hover:underline">
+              Browse files
+            </Link>
+          }
         >
           <SimpleTable
             data={data.latest_files}
             columns={[
-              { key: "file_id", header: "File" },
-              { key: "size_bytes", header: "Size", render: (row) => formatSize(row.size_bytes) },
               {
-                key: "hash_timer_id",
-                header: "HashTimer",
-                render: (row) => (row.hash_timer_id ? <HashTimerValue id={row.hash_timer_id} short /> : "—")
-              }
+                key: "id",
+                header: "File ID",
+                render: (row) => (
+                  <Link href={`/files/${row.id}`} className="text-emerald-300 underline-offset-4 hover:underline">
+                    {row.id}
+                  </Link>
+                )
+              },
+              {
+                key: "owner",
+                header: "Owner",
+                render: (row) =>
+                  row.owner ? (
+                    <Link href={`/accounts/${row.owner}`} className="text-emerald-300 underline-offset-4 hover:underline">
+                      {row.owner}
+                    </Link>
+                  ) : (
+                    "—"
+                  )
+              },
+              { key: "mime_type", header: "MIME", render: (row) => row.mime_type ?? "—" },
+              { key: "size_bytes", header: "Size", render: (row) => formatSize(row.size_bytes) },
+              { key: "availability", header: "Availability", render: (row) => row.availability ?? "—" },
+              { key: "tags", header: "Tags", render: (row) => (row.tags?.length ? row.tags.join(", ") : "—") }
             ]}
+            emptyMessage="No file data available."
           />
         </Card>
       </div>
 
       <Card
         title="Providers"
-        description="Peers advertising handle or file availability"
+        description="Provider announcements (if exposed by RPC; otherwise shown as mock or empty)"
         headerSlot={<Link href="/network" className="text-xs text-emerald-300 underline-offset-4 hover:underline">View network</Link>}
       >
         <SimpleTable
@@ -94,17 +159,19 @@ export default async function IpndhtPage() {
             { key: "peer_id", header: "Peer", render: (row) => <span className="break-all font-mono text-xs sm:text-sm">{row.peer_id}</span> },
             { key: "provides", header: "Provides" }
           ]}
+          emptyMessage="Provider announcements are not available yet."
         />
       </Card>
     </div>
   );
 }
 
-function SummaryStat({ label, value }: { label: string; value: number }) {
+function SummaryStat({ label, value, hint }: { label: string; value?: number; hint?: string }) {
   return (
     <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 px-4 py-3">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-2xl font-semibold text-emerald-100">{value.toLocaleString()}</p>
+      <p className="text-2xl font-semibold text-emerald-100">{value === undefined ? "—" : value.toLocaleString()}</p>
+      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }

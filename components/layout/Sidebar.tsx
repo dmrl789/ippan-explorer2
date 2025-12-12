@@ -9,9 +9,12 @@ const navItems: { href: Route; label: string }[] = [
   { href: "/", label: "Dashboard" },
   { href: "/blocks", label: "Blocks" },
   { href: "/accounts", label: "Accounts" },
+  { href: "/ipndht", label: "IPNDHT" },
   { href: "/handles", label: "Handles" },
   { href: "/files", label: "Files" },
-  { href: "/status", label: "Status" }
+  { href: "/network", label: "Network" },
+  { href: "/status", label: "Status" },
+  { href: "/l2", label: "L2" }
 ];
 
 export default function Sidebar() {
