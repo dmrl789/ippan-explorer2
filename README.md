@@ -15,14 +15,36 @@ npm install
 npm run dev
 ```
 
-## RPC / mock behavior (`NEXT_PUBLIC_IPPAN_RPC_URL`)
+## Configuration
 
-The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL`.
+### Connecting to a Live IPPAN Node
 
-- **When set**: pages will fetch real RPC where possible, with **mock fallback only when an endpoint is missing or errors**.
-- **When unset**: the explorer runs in a **mock-only demo mode**, and major sections are clearly badged as `"mock"` using `SourceBadge`.
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env.local
+   ```
 
-For local development you can point it to `http://localhost:8080`; in production, leaving it unset avoids UI links pointing at localhost.
+2. Edit `.env.local` and set your IPPAN node's RPC URL:
+   ```bash
+   NEXT_PUBLIC_IPPAN_RPC_URL=http://188.245.97.41:8080
+   ```
+
+3. Restart the dev server to load the new environment variables
+
+The explorer will now fetch real blockchain data from your live node!
+
+### RPC / Mock Behavior
+
+The explorer expects an IPPAN RPC endpoint configured via `NEXT_PUBLIC_IPPAN_RPC_URL`:
+
+- **When set**: Pages fetch real RPC data where possible, with **mock fallback only when an endpoint is missing or errors**.
+- **When unset**: The explorer runs in **mock-only demo mode**, and major sections are clearly badged as `"mock"` using `SourceBadge`.
+
+**Live node examples:**
+- Production: `http://188.245.97.41:8080`
+- Local development: `http://localhost:8080`
+
+In production, leaving it unset creates a standalone demo without external dependencies.
 
 ## Pages
 
