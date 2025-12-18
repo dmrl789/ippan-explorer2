@@ -8,12 +8,14 @@ export function getEnvRpcBaseUrl(): string | undefined {
   return rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 }
 
-const RPC_BASE_URL = getEnvRpcBaseUrl();
+const envRpcBaseUrl = getEnvRpcBaseUrl();
 
-if (!RPC_BASE_URL) {
+if (!envRpcBaseUrl) {
   // Build-time failure for server components / API routes
   throw new Error("IPPAN Explorer devnet mode: set NEXT_PUBLIC_IPPAN_RPC_URL or IPPAN_RPC_URL");
 }
+
+const RPC_BASE_URL = envRpcBaseUrl;
 
 export class RpcError extends Error {
   status: number;
