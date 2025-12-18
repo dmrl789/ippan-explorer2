@@ -22,7 +22,7 @@ export default async function NetworkPage() {
     <div className="space-y-6">
       <PageHeader
         title="Network peers"
-        description="Peer inventory from /peers (plus IPNDHT context when available)"
+        description="Peer inventory from devnet /peers"
         actions={
           <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
             ← Back to dashboard
@@ -35,6 +35,7 @@ export default async function NetworkPage() {
         description="Libp2p peer announcements with agent and address context"
         headerSlot={<SourceBadge source={peerData.source} />}
       >
+        {!peerData.ok && <p className="mb-3 text-sm text-slate-400">{peerData.error ?? "IPPAN devnet RPC unavailable."}</p>}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-3xl font-semibold text-emerald-100">{peerData.peers.length}</p>
@@ -43,7 +44,7 @@ export default async function NetworkPage() {
               <span>
                 DHT-enabled peers: <span className="font-semibold text-slate-200">{ipndht.summary.dht_peers_count ?? "—"}</span>
               </span>
-              <SourceBadge source={ipndht.sections?.providers ?? ipndht.source} label="IPNDHT context" />
+              <SourceBadge source={ipndht.source} label="IPNDHT context" />
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -75,6 +76,7 @@ export default async function NetworkPage() {
             { key: "last_seen_ms", header: "Last seen", render: (row) => formatLastSeen(row.last_seen_ms) }
           ]}
         />
+        {!ipndht.ok && <p className="mt-3 text-sm text-slate-400">No IPNDHT context – devnet RPC unavailable.</p>}
       </Card>
     </div>
   );

@@ -1,6 +1,5 @@
-import type { RpcSource, Transaction } from "@/types/rpc";
-import { getRpcBaseUrl } from "@/lib/rpcBase";
-import { getTransaction as getMockTransaction } from "@/lib/mockData";
+import type { Transaction } from "@/types/rpc";
+import { RpcError, rpcFetch } from "@/lib/rpcBase";
 
 function normalizeTx(record: any, fallbackHash: string): Transaction {
   return {
@@ -20,21 +19,22 @@ function normalizeTx(record: any, fallbackHash: string): Transaction {
   };
 }
 
-export async function fetchTransactionDetail(hash: string): Promise<{ source: RpcSource; tx?: Transaction }> {
-  const rpcBase = getRpcBaseUrl();
-  if (rpcBase) {
-    try {
-      const res = await fetch(`${rpcBase}/tx/${encodeURIComponent(hash)}`);
-      if (res.ok) {
-        const payload = await res.json();
-        return { source: "rpc", tx: normalizeTx(payload, hash) };
-      }
-    } catch (error) {
-      console.warn("Falling back to mock tx due to RPC error", error);
+export async function fetchTransactionDetail(
+  hash: string
+): Promise<
+  | { ok: true; source: "live"; tx: Transaction }
+  | { ok: true; source: "live"; tx: null }
+  | { ok: false; source: "error"; error: string }
+> {
+  try {
+    const payload = await rpcFetch<any>(`/tx/${encodeURIComponent(hash)}`);
+    return { ok: true, source: "live", tx: normalizeTx(payload, hash) };
+  } catch (error) {
+    if (error instanceof RpcError && error.status === 404) {
+      return { ok: true, source: "live", tx: null };
     }
+    console.error("[tx/:hash] RPC error", error);
+    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
-
-  const tx = await getMockTransaction(hash);
-  return { source: "mock", tx };
 }
 

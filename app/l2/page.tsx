@@ -33,7 +33,9 @@ function categoryStyles(category: L2App["category"]) {
 }
 
 export default async function L2Page() {
-  const [{ status, source: statusSource }, ipndht] = await Promise.all([fetchStatusWithSource(), fetchIpndht()]);
+  const [statusRes, ipndht] = await Promise.all([fetchStatusWithSource(), fetchIpndht()]);
+  const status = statusRes.ok ? statusRes.status : undefined;
+  const statusSource = statusRes.ok ? statusRes.source : "error";
 
   return (
     <div className="space-y-6">
@@ -48,12 +50,19 @@ export default async function L2Page() {
       />
 
       <Card title="Current L1 context" description="Snapshot from /status" headerSlot={<SourceBadge source={statusSource} />}>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Detail label="Round" value={(status.head.round_id ?? status.head.round_height) !== undefined ? `#${(status.head.round_id ?? status.head.round_height)!.toLocaleString()}` : "—"} />
-          <Detail label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
-          <Detail label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
-          <Detail label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
-        </div>
+        {status ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Detail
+              label="Round"
+              value={(status.head.round_id ?? status.head.round_height) !== undefined ? `#${(status.head.round_id ?? status.head.round_height)!.toLocaleString()}` : "—"}
+            />
+            <Detail label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
+            <Detail label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
+            <Detail label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">{statusRes.ok ? "Status unavailable." : statusRes.error}</p>
+        )}
       </Card>
 
       <Card title="IPNDHT context" description="File descriptors and handles footprint" headerSlot={<SourceBadge source={ipndht.source} />}>
@@ -63,6 +72,7 @@ export default async function L2Page() {
           <Detail label="Providers" value={ipndht.summary.providers_count === undefined ? "—" : ipndht.summary.providers_count.toLocaleString()} />
           <Detail label="DHT peers" value={ipndht.summary.dht_peers_count === undefined ? "—" : ipndht.summary.dht_peers_count.toLocaleString()} />
         </div>
+        {!ipndht.ok && <p className="mt-3 text-sm text-slate-400">{ipndht.error ?? "IPPAN devnet RPC unavailable."}</p>}
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

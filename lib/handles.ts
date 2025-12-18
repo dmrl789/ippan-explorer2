@@ -1,6 +1,5 @@
-import type { IpndhtHandleRecord, RpcSource } from "@/types/rpc";
-import { getRpcBaseUrl } from "@/lib/rpcBase";
-import { getIpndht } from "@/lib/mockData";
+import type { IpndhtHandleRecord } from "@/types/rpc";
+import { RpcError, rpcFetch } from "@/lib/rpcBase";
 
 function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
   const handle = typeof record?.handle === "string" && record.handle.length > 0 ? record.handle : fallback;
@@ -19,58 +18,49 @@ function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
   };
 }
 
-async function fetchHandlesList(): Promise<{ source: RpcSource; handles: IpndhtHandleRecord[] }> {
-  const rpcBase = getRpcBaseUrl();
-  if (!rpcBase) {
-    const mock = await getIpndht();
-    return { source: "mock", handles: mock.latest_handles };
-  }
-
-  try {
-    const res = await fetch(`${rpcBase}/handles`);
-    if (!res.ok) throw new Error(`RPC handles failed: ${res.status}`);
-    const payload = await res.json();
-    const rawHandles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.handles) ? payload.handles : [];
-    return { source: "rpc", handles: rawHandles.map((record, idx) => normalizeHandle(record, `handle-${idx}`)) };
-  } catch (error) {
-    console.warn("Falling back to mock handles due to RPC error", error);
-    const mock = await getIpndht();
-    return { source: "mock", handles: mock.latest_handles };
-  }
-}
-
-export async function fetchHandleRecord(handle: string): Promise<{ source: RpcSource; record?: IpndhtHandleRecord }> {
-  const rpcBase = getRpcBaseUrl();
+export async function fetchHandleRecord(
+  handle: string
+): Promise<
+  | { ok: true; source: "live"; record: IpndhtHandleRecord }
+  | { ok: true; source: "live"; record: null }
+  | { ok: false; source: "error"; error: string }
+> {
   const normalized = handle.trim();
 
-  if (rpcBase) {
-    // Try common "lookup" patterns first.
-    const candidates = [
-      `${rpcBase}/handles/${encodeURIComponent(normalized)}`,
-      `${rpcBase}/handles?query=${encodeURIComponent(normalized)}`,
-      `${rpcBase}/handles?handle=${encodeURIComponent(normalized)}`
-    ];
+  // Try common "lookup" patterns first.
+  const candidates = [
+    `/handles/${encodeURIComponent(normalized)}`,
+    `/handles?query=${encodeURIComponent(normalized)}`,
+    `/handles?handle=${encodeURIComponent(normalized)}`
+  ];
 
-    for (const url of candidates) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const payload = await res.json();
-        if (payload && typeof payload === "object") {
-          const record =
-            Array.isArray(payload?.handles) && payload.handles.length
-              ? normalizeHandle(payload.handles[0], normalized)
-              : normalizeHandle(payload, normalized);
-          return { source: "rpc", record };
-        }
-      } catch {
-        // keep trying other candidates
+  let sawNon404Error = false;
+
+  for (const path of candidates) {
+    try {
+      const payload = await rpcFetch<any>(path);
+      if (payload && typeof payload === "object") {
+        const record =
+          Array.isArray(payload?.handles) && payload.handles.length
+            ? normalizeHandle(payload.handles[0], normalized)
+            : normalizeHandle(payload, normalized);
+        return { ok: true, source: "live", record };
       }
+    } catch (error) {
+      if (error instanceof RpcError && error.status === 404) {
+        continue;
+      }
+      sawNon404Error = true;
+      console.error("[handles lookup] RPC error", error);
+      break;
     }
   }
 
-  const list = await fetchHandlesList();
-  const record = list.handles.find((candidate) => candidate.handle === normalized);
-  return { source: list.source, record };
+  if (sawNon404Error) {
+    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+  }
+
+  // If all lookup variants 404, treat as "not found" (RPC reachable).
+  return { ok: true, source: "live", record: null };
 }
 

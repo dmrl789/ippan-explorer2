@@ -23,7 +23,7 @@ export default async function IpndhtPage() {
     <div className="space-y-6">
       <PageHeader
         title="IPNDHT overview"
-        description="Explore IPNDHT handles + file descriptors (RPC-backed, mock fallback)"
+        description="Explore IPNDHT handles + file descriptors (devnet RPC only)"
         actions={
           <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
             ← Back to dashboard
@@ -33,21 +33,25 @@ export default async function IpndhtPage() {
 
       <Card
         title="Source"
-        description="Data from /api/ipndht (RPC-backed, mock fallback)"
+        description="Data from devnet RPC"
         headerSlot={<SourceBadge source={data.source} />}
       >
+        {!data.ok && <p className="mb-3 text-sm text-slate-400">{data.error ?? "IPPAN devnet RPC unavailable."}</p>}
         <div className="flex flex-wrap gap-2">
-          <SourceBadge source={data.sections?.handles ?? data.source} label={`Handles: ${data.sections?.handles === "rpc" ? "RPC" : "Mock"}`} />
-          <SourceBadge source={data.sections?.files ?? data.source} label={`Files: ${data.sections?.files === "rpc" ? "RPC" : "Mock"}`} />
-          <SourceBadge source={data.sections?.providers ?? "mock"} label={`Providers: ${data.sections?.providers === "rpc" ? "RPC" : "Mock"}`} />
-          <SourceBadge source={data.sections?.peers ?? "mock"} label={`Peers: ${data.sections?.peers === "rpc" ? "RPC" : "Mock"}`} />
+          <SourceBadge source={data.sections?.handles ?? data.source} label={`Handles: ${data.sections?.handles === "live" ? "devnet" : "error"}`} />
+          <SourceBadge source={data.sections?.files ?? data.source} label={`Files: ${data.sections?.files === "live" ? "devnet" : "error"}`} />
+          <SourceBadge
+            source={data.sections?.providers ?? data.source}
+            label={`Providers: ${data.sections?.providers === "live" ? "devnet" : "error"}`}
+          />
+          <SourceBadge source={data.sections?.peers ?? data.source} label={`Peers: ${data.sections?.peers === "live" ? "devnet" : "error"}`} />
         </div>
       </Card>
 
       <Card
         title="Summary stats"
         description="High-level footprint of IPNDHT on L1"
-        headerSlot={<SourceBadge source={data.source} label={data.source === "rpc" ? "Live" : "Mock"} />}
+        headerSlot={<SourceBadge source={data.source} />}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryStat label="Files" value={data.summary.files_count} />
@@ -150,7 +154,7 @@ export default async function IpndhtPage() {
 
       <Card
         title="Providers"
-        description="Provider announcements (if exposed by RPC; otherwise shown as mock or empty)"
+        description="Provider announcements (if exposed by RPC)"
         headerSlot={<Link href="/network" className="text-xs text-emerald-300 underline-offset-4 hover:underline">View network</Link>}
       >
         <SimpleTable

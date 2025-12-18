@@ -1,7 +1,5 @@
-import type { IpndhtFileDescriptor, IpndhtHandleRecord, IpndhtProvider, IpndhtResponse, RpcSource } from "@/types/rpc";
-import { getRpcBaseUrl } from "./rpcBase";
-import { getIpndht } from "./mockData";
-import { fetchPeers } from "./peers";
+import type { IpndhtFileDescriptor, IpndhtHandleRecord, IpndhtProvider, IpndhtResponse } from "@/types/rpc";
+import { rpcFetch } from "./rpcBase";
 import { HASHTIMER_RE } from "./hashtimer";
 
 function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
@@ -56,73 +54,56 @@ function normalizeFile(record: any, fallback: string): IpndhtFileDescriptor {
   };
 }
 
-export async function fetchIpndht(): Promise<IpndhtResponse> {
-  const mock = await getIpndht();
-  const rpcBase = getRpcBaseUrl();
-
-  if (!rpcBase) {
-    return mock;
-  }
-
-  let latest_handles: IpndhtHandleRecord[] = mock.latest_handles;
-  let latest_files: IpndhtFileDescriptor[] = mock.latest_files;
-  let providers: IpndhtProvider[] = mock.providers;
-  let handlesSource: RpcSource = "mock";
-  let filesSource: RpcSource = "mock";
-  let providersSource: RpcSource = "mock";
-  let peersSource: RpcSource = "mock";
-
+export async function fetchIpndht(): Promise<
+  | ({ ok: true; source: "live" } & Omit<IpndhtResponse, "source">)
+  | ({ ok: false; source: "error"; error: string } & Omit<IpndhtResponse, "source">)
+> {
   try {
-    const res = await fetch(`${rpcBase}/handles`);
-    if (!res.ok) {
-      throw new Error(`RPC handles failed: ${res.status}`);
-    }
-    const payload = await res.json();
-    const rawHandles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.handles) ? payload.handles : [];
-    latest_handles = rawHandles.map((record, index) => normalizeHandle(record, `handle-${index}`));
-    handlesSource = "rpc";
+    const payload = await rpcFetch<any>("/ipndht");
+
+    const rawHandles: any[] =
+      Array.isArray(payload?.latest_handles) ? payload.latest_handles : Array.isArray(payload?.handles) ? payload.handles : [];
+    const rawFiles: any[] =
+      Array.isArray(payload?.latest_files) ? payload.latest_files : Array.isArray(payload?.files) ? payload.files : [];
+    const rawProviders: any[] = Array.isArray(payload?.providers) ? payload.providers : [];
+
+    const latest_handles = rawHandles.map((record, index) => normalizeHandle(record, `handle-${index}`));
+    const latest_files = rawFiles.map((record, index) => normalizeFile(record, `file-${index}`));
+    const providers: IpndhtProvider[] = rawProviders
+      .map((record: any) => ({
+        peer_id: typeof record?.peer_id === "string" ? record.peer_id : "",
+        provides: record?.provides === "handles" || record?.provides === "files" || record?.provides === "both" ? record.provides : "both"
+      }))
+      .filter((p) => p.peer_id.length > 0);
+
+    const summary = payload?.summary && typeof payload.summary === "object" ? payload.summary : {};
+
+    return {
+      ok: true,
+      source: "live",
+      sections: { handles: "live", files: "live", providers: "live", peers: "live" },
+      summary: {
+        handles_count: typeof summary.handles_count === "number" ? summary.handles_count : latest_handles.length,
+        files_count: typeof summary.files_count === "number" ? summary.files_count : latest_files.length,
+        providers_count: typeof summary.providers_count === "number" ? summary.providers_count : providers.length,
+        peers_count: typeof summary.peers_count === "number" ? summary.peers_count : 0,
+        dht_peers_count: typeof summary.dht_peers_count === "number" ? summary.dht_peers_count : undefined
+      },
+      latest_handles,
+      latest_files,
+      providers
+    };
   } catch (error) {
-    console.warn("Falling back to mock handles due to RPC error", error);
+    console.error("[ipndht] RPC error", error);
+    return {
+      ok: false,
+      source: "error",
+      error: "IPPAN devnet RPC unavailable",
+      sections: { handles: "error", files: "error", providers: "error", peers: "error" },
+      summary: { handles_count: 0, files_count: 0, peers_count: 0 },
+      latest_handles: [],
+      latest_files: [],
+      providers: []
+    };
   }
-
-  try {
-    const res = await fetch(`${rpcBase}/files`);
-    if (!res.ok) {
-      throw new Error(`RPC files failed: ${res.status}`);
-    }
-    const payload = await res.json();
-    const rawFiles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.files) ? payload.files : [];
-    latest_files = rawFiles.map((record, index) => normalizeFile(record, `file-${index}`));
-    filesSource = "rpc";
-  } catch (error) {
-    console.warn("Falling back to mock files due to RPC error", error);
-  }
-
-  const peerData = await fetchPeers();
-  peersSource = peerData.source;
-
-  // Providers are not derived from peers (derivation would be dishonest).
-  // If the RPC exposes provider announcements in the future, wire them here.
-  providers = mock.providers;
-  providersSource = "mock";
-
-  const peerIds = new Set(peerData.peers.map((peer) => peer.peer_id));
-  const dhtPeersCount = providers.filter((provider) => peerIds.has(provider.peer_id)).length;
-
-  const source: RpcSource = handlesSource === "rpc" || filesSource === "rpc" || peersSource === "rpc" ? "rpc" : "mock";
-
-  return {
-    source,
-    sections: { handles: handlesSource, files: filesSource, providers: providersSource, peers: peersSource },
-    summary: {
-      handles_count: latest_handles.length,
-      files_count: latest_files.length,
-      providers_count: providers.length,
-      peers_count: peerData.peers.length,
-      dht_peers_count: dhtPeersCount
-    },
-    latest_handles,
-    latest_files,
-    providers
-  };
 }

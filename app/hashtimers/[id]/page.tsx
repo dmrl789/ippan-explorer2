@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
 import CopyButton from "@/components/common/CopyButton";
 import JsonViewer from "@/components/common/JsonViewer";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
@@ -9,6 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { formatTimestamp, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
 import type { HashTimerDetail } from "@/types/rpc";
+import { SourceBadge } from "@/components/common/SourceBadge";
 
 interface HashTimerPageProps {
   params: { id: string };
@@ -21,10 +21,28 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
   const baseUrl = host ? `${protocol}://${host}` : process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
   const response = await fetch(`${baseUrl}/api/hashtimers/${params.id}`, { cache: "no-store" });
-  if (!response.ok) {
-    notFound();
+  const json = response.ok ? ((await response.json()) as any) : null;
+
+  if (!response.ok || !json?.ok) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title={`HashTimer ${params.id}`}
+          description="Detailed HashTimer anchor with consensus metadata"
+          actions={
+            <Link href="/" className="text-sm text-slate-400 hover:text-slate-100">
+              ← Dashboard
+            </Link>
+          }
+        />
+        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
+          <p className="text-sm text-slate-400">{json?.error ?? "IPPAN devnet RPC unavailable"}</p>
+        </Card>
+      </div>
+    );
   }
-  const detail = (await response.json()) as HashTimerDetail;
+
+  const detail = json.data as HashTimerDetail;
   const transactions = detail.tx_ids ?? [];
   const parents = detail.parents ?? [];
   const ippanMs =

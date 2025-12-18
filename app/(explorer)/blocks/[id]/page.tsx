@@ -15,11 +15,21 @@ interface BlockDetailPageProps {
 }
 
 export default async function BlockDetailPage({ params }: BlockDetailPageProps) {
-  const { source, block } = await fetchBlockDetail(params.id);
-  if (!block) {
+  const result = await fetchBlockDetail(params.id);
+  if (!result.ok) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Block" description={`#${params.id}`} actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} />
+        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
+          <p className="text-sm text-slate-400">{result.error}</p>
+        </Card>
+      </div>
+    );
+  }
+  if (!result.block) {
     notFound();
   }
-  const resolvedBlock = block;
+  const resolvedBlock = result.block;
   const blockIppanMs =
     resolvedBlock.ippan_time_ms ??
     (resolvedBlock.ippan_time_us
@@ -39,7 +49,7 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
         }
       />
 
-      <Card title="Block header" headerSlot={<SourceBadge source={source} />}>
+      <Card title="Block header" headerSlot={<SourceBadge source={result.source} />}>
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <div>

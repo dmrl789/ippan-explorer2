@@ -1,27 +1,19 @@
 import type { PeersResponse } from "@/types/rpc";
-import { getRpcBaseUrl } from "./rpcBase";
-import { getPeers as getMockPeers } from "./mockData";
+import { rpcFetch } from "./rpcBase";
 
-export async function fetchPeers(): Promise<PeersResponse> {
-  const rpcBase = getRpcBaseUrl();
-  if (!rpcBase) {
-    return getMockPeers();
-  }
-
+export async function fetchPeers(): Promise<
+  | { ok: true; source: "live"; peers: PeersResponse["peers"] }
+  | { ok: false; source: "error"; error: string; peers: PeersResponse["peers"] }
+> {
   try {
-    const res = await fetch(`${rpcBase}/peers`);
-    if (!res.ok) {
-      throw new Error(`RPC peers failed: ${res.status}`);
-    }
-
-    const data = (await res.json()) as PeersResponse;
-    if (!Array.isArray(data.peers)) {
+    const data = await rpcFetch<any>("/peers");
+    const peers: PeersResponse["peers"] = Array.isArray(data?.peers) ? data.peers : Array.isArray(data) ? data : [];
+    if (!Array.isArray(peers)) {
       throw new Error("RPC peers payload missing peers array");
     }
-
-    return { source: "rpc", peers: data.peers };
+    return { ok: true, source: "live", peers };
   } catch (error) {
-    console.warn("Falling back to mock peers due to RPC error", error);
-    return getMockPeers();
+    console.error("[peers] RPC error", error);
+    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", peers: [] };
   }
 }

@@ -1,6 +1,5 @@
-import type { BlockDetail, BlockSummary, Transaction, RpcSource } from "@/types/rpc";
-import { getRpcBaseUrl } from "@/lib/rpcBase";
-import { getBlockById, getRecentBlocks } from "@/lib/mockData";
+import type { BlockDetail, BlockSummary, Transaction } from "@/types/rpc";
+import { RpcError, rpcFetch } from "@/lib/rpcBase";
 
 function normalizeTx(record: any, fallbackHash: string): Transaction {
   return {
@@ -41,39 +40,36 @@ function normalizeBlockDetail(record: any, fallbackId: string): BlockDetail {
   return { ...summary, parents, transactions };
 }
 
-export async function fetchRecentBlocks(): Promise<{ source: RpcSource; blocks: BlockSummary[] }> {
-  const rpcBase = getRpcBaseUrl();
-  if (!rpcBase) {
-    return { source: "mock", blocks: await getRecentBlocks() };
-  }
-
+export async function fetchRecentBlocks(): Promise<
+  | { ok: true; source: "live"; blocks: BlockSummary[] }
+  | { ok: false; source: "error"; error: string; blocks: BlockSummary[] }
+> {
   try {
-    const res = await fetch(`${rpcBase}/blocks`);
-    if (!res.ok) throw new Error(`RPC blocks failed: ${res.status}`);
-    const payload = await res.json();
+    const payload = await rpcFetch<any>("/blocks");
     const rawBlocks: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.blocks) ? payload.blocks : [];
-    return { source: "rpc", blocks: rawBlocks.map((b, idx) => normalizeBlockSummary(b, String(idx))) };
+    return { ok: true, source: "live", blocks: rawBlocks.map((b, idx) => normalizeBlockSummary(b, String(idx))) };
   } catch (error) {
-    console.warn("Falling back to mock blocks due to RPC error", error);
-    return { source: "mock", blocks: await getRecentBlocks() };
+    console.error("[blocks] RPC error", error);
+    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", blocks: [] };
   }
 }
 
-export async function fetchBlockDetail(id: string): Promise<{ source: RpcSource; block?: BlockDetail }> {
-  const rpcBase = getRpcBaseUrl();
-  if (rpcBase) {
-    try {
-      const res = await fetch(`${rpcBase}/blocks/${encodeURIComponent(id)}`);
-      if (res.ok) {
-        const payload = await res.json();
-        return { source: "rpc", block: normalizeBlockDetail(payload, id) };
-      }
-    } catch (error) {
-      console.warn("Block detail fetch failed; falling back to mock", error);
+export async function fetchBlockDetail(
+  id: string
+): Promise<
+  | { ok: true; source: "live"; block: BlockDetail }
+  | { ok: true; source: "live"; block: null }
+  | { ok: false; source: "error"; error: string }
+> {
+  try {
+    const payload = await rpcFetch<any>(`/blocks/${encodeURIComponent(id)}`);
+    return { ok: true, source: "live", block: normalizeBlockDetail(payload, id) };
+  } catch (error) {
+    if (error instanceof RpcError && error.status === 404) {
+      return { ok: true, source: "live", block: null };
     }
+    console.error("[blocks/:id] RPC error", error);
+    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
-
-  const mock = await getBlockById(id);
-  return { source: "mock", block: mock };
 }
 

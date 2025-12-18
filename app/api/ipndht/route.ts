@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { fetchIpndht } from "@/lib/ipndht";
+import { rpcFetch } from "@/lib/rpcBase";
 
 export async function GET() {
-  const data = await fetchIpndht();
-  return NextResponse.json(data);
+  try {
+    const data = await rpcFetch<any>("/ipndht");
+    return NextResponse.json({ ok: true, source: "live", data }, { status: 200 });
+  } catch (err) {
+    console.error("[/api/ipndht] RPC error", err);
+    return NextResponse.json({ ok: false, source: "error", error: "IPPAN devnet RPC unavailable" }, { status: 502 });
+  }
 }

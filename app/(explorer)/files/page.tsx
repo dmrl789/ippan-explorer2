@@ -17,12 +17,12 @@ function shorten(value: string, size = 10) {
 }
 
 export default async function FilesPage({ searchParams }: FilesPageProps) {
-  const { source, files } = await fetchIpndhtFiles();
+  const result = await fetchIpndhtFiles();
   const queryId = (searchParams?.id ?? searchParams?.query ?? "").trim();
   const queryOwner = (searchParams?.owner ?? "").trim();
   const queryTag = (searchParams?.tag ?? "").trim();
 
-  const filtered = files.filter((file) => {
+  const filtered = result.files.filter((file) => {
     if (queryId) {
       const idMatch = file.id.toLowerCase().includes(queryId.toLowerCase()) || file.file_id?.toLowerCase().includes(queryId.toLowerCase());
       if (!idMatch) return false;
@@ -46,8 +46,9 @@ export default async function FilesPage({ searchParams }: FilesPageProps) {
       <Card
         title="Filter"
         description="Search by file id, owner address, or tag"
-        headerSlot={<SourceBadge source={source} />}
+        headerSlot={<SourceBadge source={result.source} />}
       >
+        {!result.ok && <p className="mb-3 text-sm text-slate-400">{result.error ?? "IPPAN devnet RPC unavailable."}</p>}
         <FileSearchForm />
       </Card>
 

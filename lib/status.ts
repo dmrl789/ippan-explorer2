@@ -1,6 +1,5 @@
 import { toMsFromUs } from "./ippanTime";
-import { getRpcBaseUrl } from "./rpcBase";
-import { getStatus } from "./mockData";
+import { rpcFetch } from "./rpcBase";
 import type { StatusResponseV1 } from "@/types/rpc";
 
 function ensureHeadTime(status: StatusResponseV1): StatusResponseV1 {
@@ -28,26 +27,15 @@ function ensureHeadTime(status: StatusResponseV1): StatusResponseV1 {
   return { ...status, head };
 }
 
-export async function fetchStatusWithSource(): Promise<{ status: StatusResponseV1; source: "rpc" | "mock" }> {
-  const rpcBase = getRpcBaseUrl();
-  if (!rpcBase) {
-    return { status: ensureHeadTime(await getStatus()), source: "mock" };
-  }
-
+export async function fetchStatusWithSource(): Promise<
+  | { ok: true; source: "live"; status: StatusResponseV1 }
+  | { ok: false; source: "error"; error: string }
+> {
   try {
-    const res = await fetch(`${rpcBase}/status`);
-    if (!res.ok) {
-      throw new Error(`RPC status failed: ${res.status}`);
-    }
-    const status = ensureHeadTime((await res.json()) as StatusResponseV1);
-    return { status, source: "rpc" };
+    const status = ensureHeadTime(await rpcFetch<StatusResponseV1>("/status"));
+    return { ok: true, source: "live", status };
   } catch (error) {
-    console.warn("Falling back to mock status due to RPC error", error);
-    return { status: ensureHeadTime(await getStatus()), source: "mock" };
+    console.error("[status] RPC error", error);
+    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
-}
-
-export async function fetchStatus(): Promise<StatusResponseV1> {
-  const { status } = await fetchStatusWithSource();
-  return status;
 }
