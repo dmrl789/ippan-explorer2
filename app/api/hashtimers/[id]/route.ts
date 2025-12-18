@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rpcFetch } from "@/lib/rpcBase";
+import { rpcFetch } from "@/lib/rpc";
 import { toMsFromUs } from "@/lib/ippanTime";
 import type { HashTimerDetail } from "@/types/rpc";
 

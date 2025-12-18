@@ -1,5 +1,5 @@
 import type { IpndhtFileDescriptor } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpcBase";
+import { RpcError, rpcFetch } from "@/lib/rpc";
 
 function normalizeFile(record: any, fallbackId: string): IpndhtFileDescriptor {
   const id =

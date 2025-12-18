@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rpcFetch } from "@/lib/rpcBase";
+import { rpcFetch } from "@/lib/rpc";
 
 export async function GET() {
   try {

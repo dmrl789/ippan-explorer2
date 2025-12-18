@@ -1,5 +1,5 @@
 import type { IpndhtHandleRecord } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpcBase";
+import { RpcError, rpcFetch } from "@/lib/rpc";
 
 function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
   const handle = typeof record?.handle === "string" && record.handle.length > 0 ? record.handle : fallback;

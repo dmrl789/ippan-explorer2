@@ -1,5 +1,5 @@
 import { toMsFromUs } from "./ippanTime";
-import { rpcFetch } from "./rpcBase";
+import { rpcFetch } from "./rpc";
 import type { StatusResponseV1 } from "@/types/rpc";
 
 function ensureHeadTime(status: StatusResponseV1): StatusResponseV1 {
