@@ -1,11 +1,21 @@
-const RAW_RPC_BASE_URL = process.env.NEXT_PUBLIC_IPPAN_RPC_URL?.trim();
+export function getEnvRpcBaseUrl(): string | undefined {
+  const rawBase =
+    process.env.NEXT_PUBLIC_IPPAN_RPC_URL?.trim() ||
+    process.env.IPPAN_RPC_URL?.trim() ||
+    process.env.IPPAN_RPC_BASE?.trim();
 
-if (!RAW_RPC_BASE_URL) {
-  // Build-time failure for server components / API routes
-  throw new Error("IPPAN Explorer devnet mode: NEXT_PUBLIC_IPPAN_RPC_URL must be set");
+  if (!rawBase) return undefined;
+  return rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 }
 
-const RPC_BASE_URL = RAW_RPC_BASE_URL.endsWith("/") ? RAW_RPC_BASE_URL.slice(0, -1) : RAW_RPC_BASE_URL;
+const envRpcBaseUrl = getEnvRpcBaseUrl();
+
+if (!envRpcBaseUrl) {
+  // Build-time failure for server components / API routes
+  throw new Error("IPPAN Explorer devnet mode: set NEXT_PUBLIC_IPPAN_RPC_URL or IPPAN_RPC_URL");
+}
+
+const RPC_BASE_URL = envRpcBaseUrl;
 
 export class RpcError extends Error {
   status: number;

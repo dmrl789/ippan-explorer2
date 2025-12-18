@@ -1,11 +1,11 @@
+import { RpcError, buildRpcUrl, getEnvRpcBaseUrl, requireRpcBaseUrl, rpcFetch } from "./rpc";
+
 export function getRpcBaseUrl(): string | undefined {
-  const rawBase = process.env.NEXT_PUBLIC_IPPAN_RPC_URL?.trim();
-  if (!rawBase) return undefined;
-  return rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
+  return getEnvRpcBaseUrl();
 }
 
 // Back-compat re-exports. New code should import from "@/lib/rpc".
-export { RpcError, buildRpcUrl, requireRpcBaseUrl, rpcFetch } from "./rpc";
+export { RpcError, buildRpcUrl, requireRpcBaseUrl, rpcFetch };
 
 export function getP2pBaseUrl(): string | undefined {
   const rawBase =
