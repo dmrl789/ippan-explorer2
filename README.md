@@ -15,9 +15,9 @@ npm install
 npm run dev
 ```
 
-## RPC behavior (`NEXT_PUBLIC_IPPAN_RPC_URL`)
+## RPC behavior (`NEXT_PUBLIC_IPPAN_RPC_URL` / `IPPAN_RPC_URL`)
 
-The explorer requires a reachable IPPAN devnet RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL` (set this in Vercel env vars for deploys).
+The explorer requires a reachable IPPAN devnet RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL` (set this in Vercel env vars for deploys). Server components and API routes also honor a private `IPPAN_RPC_URL` or `IPPAN_RPC_BASE` env var if you prefer not to expose the base URL to the client; using either ensures the app fetches live devnet data.
 
 - **No mocks**: the production explorer never falls back to mock/demo data.
 - **If RPC is unreachable**: pages show **“Devnet RPC unavailable”** (and API routes return `{ ok: false }`) rather than faking state.
