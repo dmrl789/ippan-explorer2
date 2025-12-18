@@ -7,13 +7,14 @@ import { fetchRecentBlocks } from "@/lib/blocks";
 import { formatTimestamp, shortenHash } from "@/lib/format";
 
 export default async function BlocksPage() {
-  const { source, blocks } = await fetchRecentBlocks();
+  const result = await fetchRecentBlocks();
   return (
     <div className="space-y-6">
-      <PageHeader title="Blocks" description="Latest blocks from /blocks (mock fallback is always badged)" />
-      <Card title="Recent blocks" headerSlot={<SourceBadge source={source} />}>
+      <PageHeader title="Blocks" description="Latest blocks from devnet /blocks" />
+      <Card title="Recent blocks" headerSlot={<SourceBadge source={result.source} />}>
+        {!result.ok && <p className="mb-3 text-sm text-slate-400">{result.error ?? "IPPAN devnet RPC unavailable."}</p>}
         <SimpleTable
-          data={blocks}
+          data={result.blocks}
           columns={[
             {
               key: "id",

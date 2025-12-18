@@ -1,7 +1,9 @@
 /**
- * Mock fixtures used ONLY when `NEXT_PUBLIC_IPPAN_RPC_URL` is unset (or when an RPC call fails).
- * All UI that uses these mocks MUST clearly show `SourceBadge: mock` so users never confuse demo
- * data with live chain state.
+ * NOTE: IPPAN DEVNET MODE
+ *
+ * This module is now **test-only**. The production explorer must never
+ * serve mock data. All calls to these helpers MUST be removed from
+ * runtime paths (app routes, server components, API routes).
  */
 import type {
   AccountSummary,
@@ -380,13 +382,13 @@ export function getFiles(): Promise<FileRecord[]> {
 }
 
 export function getPeers(): Promise<PeersResponse> {
-  return Promise.resolve({ source: "mock", peers });
+  return Promise.resolve({ source: "error", peers });
 }
 
 export function getIpndht(): Promise<IpndhtResponse> {
   return Promise.resolve({
-    source: "mock",
-    sections: { handles: "mock", files: "mock", providers: "mock", peers: "mock" },
+    source: "error",
+    sections: { handles: "error", files: "error", providers: "error", peers: "error" },
     summary: {
       handles_count: ipndhtHandleRecords.length,
       files_count: ipndhtFileDescriptors.length,

@@ -9,7 +9,7 @@ export function DashboardGraphs(_props: { status: StatusResponseV1; peersCount?:
           Graphs will activate once a history RPC is implemented (e.g. blocks/rounds time series).
         </p>
         <p className="text-xs text-slate-500">
-          Today the explorer only has snapshot data from <span className="font-mono">/status</span> with mock fallback.
+          Today the explorer only has snapshot data from <span className="font-mono">/status</span>.
         </p>
       </div>
     </Card>

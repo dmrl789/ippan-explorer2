@@ -1,4 +1,9 @@
-export type RpcSource = "rpc" | "mock";
+/**
+ * Data origin for the devnet-only explorer.
+ * - "live": fetched from the configured IPPAN devnet RPC
+ * - "error": RPC missing/unreachable (no mock/demo fallback)
+ */
+export type RpcSource = "live" | "error";
 
 export interface AiStatus {
   modelHash: string;
@@ -73,10 +78,6 @@ export interface AccountSummary {
 }
 
 export interface PaymentEntry {
-  /**
-   * MOCK-ONLY (for now): the public L1 RPC may not expose account payment history yet.
-   * The UI must badge this section as mock unless backed by RPC.
-   */
   direction: "incoming" | "outgoing" | "self";
   amount: number;
   fee: number;
@@ -128,10 +129,6 @@ export type StatusResponseV1 = {
     finalized: boolean;
     hash_timer_seq?: string;
   };
-  /**
-   * MOCK-ONLY (for now): these broad network totals are often not present on minimal L1 RPC.
-   * The dashboard must not display them unless the RPC truly provides them.
-   */
   counters?: {
     finalized_rounds?: number;
     transactions_total?: number;
@@ -247,9 +244,6 @@ export type IpndhtProvider = {
 
 export type IpndhtResponse = {
   source: RpcSource;
-  /**
-   * Optional per-section sources to keep mock-vs-RPC behavior obvious in the UI.
-   */
   sections?: {
     handles: RpcSource;
     files: RpcSource;

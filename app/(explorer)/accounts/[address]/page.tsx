@@ -5,20 +5,34 @@ import AccountPanel from "@/components/accounts/AccountPanel";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getAccount, getPayments } from "@/lib/mockData";
 import { fetchIpndhtFiles } from "@/lib/files";
+import { fetchAccountSummary } from "@/lib/accounts";
+import type { PaymentEntry } from "@/types/rpc";
 
 interface AccountPageProps {
   params: { address: string };
 }
 
 export default async function AccountPage({ params }: AccountPageProps) {
-  const [account, payments, ipndhtFiles] = await Promise.all([getAccount(params.address), getPayments(), fetchIpndhtFiles()]);
+  const [accountRes, ipndhtFiles] = await Promise.all([fetchAccountSummary(params.address), fetchIpndhtFiles()]);
 
-  if (!account) {
+  if (!accountRes.ok) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Account" description={params.address} actions={<Link href="/accounts" className="text-sm text-slate-400 hover:text-slate-100">← Back to accounts</Link>} />
+        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
+          <p className="text-sm text-slate-400">{accountRes.error}</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!accountRes.account) {
     notFound();
   }
-  const resolvedAccount = account;
+
+  const resolvedAccount = accountRes.account;
+  const payments: PaymentEntry[] = [];
   const owned = ipndhtFiles.files.filter((file) => (file.owner ?? "").toLowerCase() === resolvedAccount.address.toLowerCase());
   const aiOwned = owned.filter((file) => {
     const doctype = typeof file.meta?.doctype === "string" ? file.meta.doctype.toLowerCase() : "";
@@ -60,11 +74,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
             }
           />
         </div>
-        {ipndhtFiles.source === "mock" && (
-          <p className="mt-3 text-xs text-amber-200">
-            Mock mode: counts are based on demo descriptors and will differ from live RPC.
-          </p>
-        )}
+        {!ipndhtFiles.ok && <p className="mt-3 text-sm text-slate-400">No IPNDHT file data – devnet RPC unavailable.</p>}
       </Card>
     </div>
   );

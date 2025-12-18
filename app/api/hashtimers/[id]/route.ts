@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRpcBaseUrl } from "@/lib/rpcBase";
-import { mockHashtimer } from "@/lib/mockData";
+import { rpcFetch } from "@/lib/rpcBase";
 import { toMsFromUs } from "@/lib/ippanTime";
 import type { HashTimerDetail } from "@/types/rpc";
 
@@ -35,19 +34,11 @@ function normalizeIppanTime(detail: HashTimerDetail): HashTimerDetail {
 
 export async function GET(_request: Request, { params }: Params) {
   const { id } = params;
-  const rpcBase = getRpcBaseUrl();
-
-  if (rpcBase) {
-    try {
-      const response = await fetch(`${rpcBase}/hashtimers/${id}`);
-      if (response.ok) {
-        const data = (await response.json()) as HashTimerDetail;
-        return NextResponse.json(normalizeIppanTime(data));
-      }
-    } catch (error) {
-      console.error("Falling back to mock HashTimer detail", error);
-    }
+  try {
+    const data = await rpcFetch<HashTimerDetail>(`/hashtimers/${encodeURIComponent(id)}`);
+    return NextResponse.json({ ok: true, source: "live", data: normalizeIppanTime(data) }, { status: 200 });
+  } catch (err) {
+    console.error("[/api/hashtimers/:id] RPC error", err);
+    return NextResponse.json({ ok: false, source: "error", error: "IPPAN devnet RPC unavailable" }, { status: 502 });
   }
-
-  return NextResponse.json(normalizeIppanTime(mockHashtimer(id)));
 }

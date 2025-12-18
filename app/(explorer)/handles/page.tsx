@@ -11,7 +11,7 @@ interface HandlesPageProps {
 
 export default async function HandlesPage({ searchParams }: HandlesPageProps) {
   const handleQuery = searchParams.handle ?? searchParams.query;
-  const { source, record } = handleQuery ? await fetchHandleRecord(handleQuery) : { source: "mock" as const, record: undefined };
+  const result = handleQuery ? await fetchHandleRecord(handleQuery) : null;
 
   return (
     <div className="space-y-6">
@@ -22,24 +22,26 @@ export default async function HandlesPage({ searchParams }: HandlesPageProps) {
       </Card>
 
       {handleQuery && (
-        <Card title={`Lookup result for ${handleQuery}`} headerSlot={<SourceBadge source={source} />}>
-          {record ? (
+        <Card title={`Lookup result for ${handleQuery}`} headerSlot={<SourceBadge source={result?.ok ? result.source : "error"} />}>
+          {!result?.ok ? (
+            <p className="text-sm text-slate-400">{result?.error ?? "IPPAN devnet RPC unavailable."}</p>
+          ) : result.record ? (
             <div className="space-y-2 text-sm text-slate-300">
               <p>
                 Owner:{" "}
-                {record.owner ? (
-                  <Link href={`/accounts/${record.owner}`} className="text-emerald-300 underline-offset-4 hover:underline">
-                    {record.owner}
+                {result.record.owner ? (
+                  <Link href={`/accounts/${result.record.owner}`} className="text-emerald-300 underline-offset-4 hover:underline">
+                    {result.record.owner}
                   </Link>
                 ) : (
                   "—"
                 )}
               </p>
-              <p>Expires: {record.expires_at ?? "—"}</p>
-              {record.owner && (
+              <p>Expires: {result.record.expires_at ?? "—"}</p>
+              {result.record.owner && (
                 <div className="pt-2">
                   <Link
-                    href={`/files?owner=${encodeURIComponent(record.owner)}`}
+                    href={`/files?owner=${encodeURIComponent(result.record.owner)}`}
                     className="inline-flex rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
                   >
                     View files owned by this address

@@ -15,11 +15,21 @@ interface TransactionPageProps {
 }
 
 export default async function TransactionDetailPage({ params }: TransactionPageProps) {
-  const { source, tx } = await fetchTransactionDetail(params.hash);
-  if (!tx) {
+  const result = await fetchTransactionDetail(params.hash);
+  if (!result.ok) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Transaction" description={shortenHash(params.hash)} actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back</Link>} />
+        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
+          <p className="text-sm text-slate-400">{result.error}</p>
+        </Card>
+      </div>
+    );
+  }
+  if (!result.tx) {
     notFound();
   }
-  const resolvedTx = tx;
+  const resolvedTx = result.tx;
   const txIppanMs =
     resolvedTx.ippan_time_ms ??
     (resolvedTx.ippan_time_us
@@ -39,7 +49,7 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
         }
       />
 
-      <Card title="Transaction summary" headerSlot={<SourceBadge source={source} />}>
+      <Card title="Transaction summary" headerSlot={<SourceBadge source={result.source} />}>
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="From" value={resolvedTx.from} />
           <Detail label="To" value={resolvedTx.to} />

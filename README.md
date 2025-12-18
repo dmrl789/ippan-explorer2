@@ -1,6 +1,6 @@
 # IPPAN Explorer
 
-A modern Next.js + Tailwind CSS explorer for the IPPAN network. The explorer is designed to be a truthful “front door” to L1 + IPNDHT + L2 modules: it shows what the current RPC exposes, and clearly badges mock fallback data when running without an RPC URL.
+A modern Next.js + Tailwind CSS explorer for the IPPAN network. This repo is **devnet-only**: it reads from a live IPPAN devnet RPC and never serves demo/mock data.
 
 ## What this explorer shows
 
@@ -15,32 +15,30 @@ npm install
 npm run dev
 ```
 
-## RPC / mock behavior (`NEXT_PUBLIC_IPPAN_RPC_URL`)
+## RPC behavior (`NEXT_PUBLIC_IPPAN_RPC_URL`)
 
-The explorer expects an IPPAN RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL`.
+The explorer requires a reachable IPPAN devnet RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL` (set this in Vercel env vars for deploys).
 
-- **When set**: pages will fetch real RPC where possible, with **mock fallback only when an endpoint is missing or errors**.
-- **When unset**: the explorer runs in a **mock-only demo mode**, and major sections are clearly badged as `"mock"` using `SourceBadge`.
-
-For local development you can point it to `http://localhost:8080`; in production, leaving it unset avoids UI links pointing at localhost.
+- **No mocks**: the production explorer never falls back to mock/demo data.
+- **If RPC is unreachable**: pages show **“Devnet RPC unavailable”** (and API routes return `{ ok: false }`) rather than faking state.
 
 ## Pages
 
 - `/` – Dashboard: truthful L1 snapshot + peers + IPNDHT + links to L2.
 - `/blocks` – Latest blocks, plus `/blocks/[id]` for block details + transactions.
 - `/tx/[hash]` – Transaction detail + raw JSON view.
-- `/accounts` – Landing page with examples.
-- `/accounts/[address]` – Account overview (payments may be mock if RPC doesn’t expose history yet).
-- `/ipndht` – IPNDHT overview: counts + recent file descriptors + recent handles (RPC-backed, mock fallback).
+- `/accounts` – Landing page (no demo data).
+- `/accounts/[address]` – Account overview (payment history is shown only if your RPC exposes it).
+- `/ipndht` – IPNDHT overview from devnet RPC.
 - `/files` – Browse IPNDHT file descriptors with filters (`id`, `owner`, `tag`); `/files/[id]` shows descriptor detail + raw JSON.
-- `/handles` – Search for `@handle.ipn` records and resolve to an owner (with source badge).
-- `/network` – Peer inventory from `/peers`, with IPNDHT context when available.
-- `/status` – Operator/cluster view combining `/health`, `/status`, and `/ai/status`.
+- `/handles` – Search for `@handle.ipn` records and resolve to an owner.
+- `/network` – Peer inventory from `/peers`.
+- `/status` – Operator/cluster view combining `/health`, `/status`, and `/ai/status` (if exposed by your devnet RPC).
 - `/l2` – L2 modules list driven by config + IPNDHT tag footprint (no invented state).
 
 ## HashTimer spec
 
-HashTimers follow the IPPAN format: a 64-character lowercase hexadecimal string with no prefix, shaped as `<14-hex time prefix><50-hex BLAKE3 hash>`. The explorer enforces this canonical format across mocks and UI rendering: invalid values get a red badge, and mock HashTimers are generated in `lib/hashtimer.ts` to stay spec-compliant.
+HashTimers follow the IPPAN format: a 64-character lowercase hexadecimal string with no prefix, shaped as `<14-hex time prefix><50-hex BLAKE3 hash>`. The explorer enforces this canonical format in UI rendering: invalid values get a red badge.
 
 ## L2 hooks on L1
 
@@ -48,14 +46,12 @@ This explorer treats L2 as **surfaces anchored on L1**: it lists L2 modules and 
 
 ## Network + IPNDHT features
 
-- `/api/peers` proxies to `${NEXT_PUBLIC_IPPAN_RPC_URL}/peers` when available or returns stable mock peers otherwise.
-- `/api/ipndht` aggregates handles, files, providers, and peer counts from RPC (with per-section mock fallback) for the `/ipndht` page.
-- The dashboard highlights live vs. mock sources for HashTimers, IPNDHT, peers, and operator status; `/network` and `/ipndht` expose detailed tables with the same source badges.
-- Node health draws from `/health` + `/status` (or mocks), while IPNDHT-facing UX for handles/files remains available even in mock mode.
+- `/api/peers` proxies to `${NEXT_PUBLIC_IPPAN_RPC_URL}/peers` (no mock fallback).
+- `/api/ipndht` proxies to `${NEXT_PUBLIC_IPPAN_RPC_URL}/ipndht` (no mock fallback).
+- When the RPC is down/unreachable, the UI shows a clear devnet error state instead of fake data.
 
 ## Tech stack
 
 - Next.js App Router + React Server Components
 - Tailwind CSS for styling
 - TypeScript-first components and RPC types in `types/rpc.ts`
-- Mock data loaders in `lib/mockData.ts` to simulate RPC responses

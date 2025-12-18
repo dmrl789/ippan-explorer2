@@ -22,11 +22,21 @@ function extractUris(retrieval: Record<string, unknown> | undefined): string[] {
 }
 
 export default async function FilePage({ params }: FilePageProps) {
-  const { source, file } = await fetchIpndhtFileDescriptor(params.id);
-  if (!file) {
+  const result = await fetchIpndhtFileDescriptor(params.id);
+  if (!result.ok) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="File" description={params.id} actions={<Link href="/files" className="text-sm text-slate-400 hover:text-slate-100">← Back to files</Link>} />
+        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
+          <p className="text-sm text-slate-400">{result.error}</p>
+        </Card>
+      </div>
+    );
+  }
+  if (!result.file) {
     notFound();
   }
-  const resolvedFile = file;
+  const resolvedFile = result.file;
   const doctype = typeof resolvedFile.meta?.doctype === "string" ? resolvedFile.meta.doctype : undefined;
   const uris = extractUris(resolvedFile.retrieval);
 
@@ -45,7 +55,7 @@ export default async function FilePage({ params }: FilePageProps) {
       <Card
         title="File descriptor"
         description="Metadata only. Clients MUST verify content_hash before using retrieved content."
-        headerSlot={<SourceBadge source={source} />}
+        headerSlot={<SourceBadge source={result.source} />}
       >
         <div className="grid gap-4 md:grid-cols-2">
           <Detail label="ID" value={resolvedFile.id} />

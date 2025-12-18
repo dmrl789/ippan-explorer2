@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -11,9 +10,7 @@ export default function AccountsLandingPage() {
           Use the global search bar to jump directly to an account by address or handle, or pick from recent entities below
           once live data is available.
         </p>
-        <p className="text-sm text-slate-400">
-          Example: <Link href="/accounts/0xAccount000000000000000000000000000000000000">demo account</Link>
-        </p>
+        <p className="text-sm text-slate-400">This explorer does not include demo accounts; it only shows devnet RPC data.</p>
       </Card>
     </div>
   );
