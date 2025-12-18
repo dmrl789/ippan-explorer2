@@ -11,7 +11,7 @@ import { LABEL_FINALIZED_ROUND_INDEX, LABEL_IPPAN_TIME } from "@/lib/terminology
 export default async function StatusPage() {
   const [healthRes, aiRes, statusRes] = await Promise.all([fetchHealthWithSource(), fetchAiStatusWithSource(), fetchStatusWithSource()]);
   const healthSource = healthRes.ok ? healthRes.source : "error";
-  const aiSource = aiRes.ok ? aiRes.source : "error";
+  const aiSource = aiRes.ok ? (aiRes.source === "missing" ? "live" : aiRes.source) : "error";
   const statusSource = statusRes.ok ? statusRes.source : "error";
 
   const status = statusRes.ok ? statusRes.status : undefined;
@@ -63,7 +63,9 @@ export default async function StatusPage() {
         </Card>
 
         <Card title="AI status" description="From /ai/status" headerSlot={<SourceBadge source={aiSource} />}>
-          {aiRes.ok && aiRes.ai ? (
+          {!aiRes.ok ? (
+            <p className="text-sm text-slate-400">{aiRes.error}</p>
+          ) : aiRes.aiAvailable && aiRes.ai ? (
             <div className="space-y-2">
               <StatusPill status={aiRes.ai.usingStub ? "warn" : "ok"} />
               <p className="text-sm text-slate-400">Model hash</p>
@@ -71,7 +73,7 @@ export default async function StatusPage() {
               <p className="text-xs text-slate-500">Mode: {aiRes.ai.mode}</p>
             </div>
           ) : (
-            <p className="text-sm text-slate-400">{aiRes.ok ? "AI status unavailable." : aiRes.error}</p>
+            <p className="text-sm text-slate-400">{aiRes.source === "missing" ? aiRes.message : "AI status unavailable."}</p>
           )}
         </Card>
       </div>
@@ -86,7 +88,15 @@ export default async function StatusPage() {
       </div>
 
       <Card title="Raw /ai/status JSON">
-        <JsonViewer data={aiRes.ok ? aiRes.ai : { error: aiRes.error }} />
+        <JsonViewer
+          data={
+            aiRes.ok
+              ? aiRes.aiAvailable
+                ? aiRes.ai
+                : { note: aiRes.source === "missing" ? aiRes.message : "AI status unavailable." }
+              : { error: aiRes.error }
+          }
+        />
       </Card>
     </div>
   );

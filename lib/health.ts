@@ -1,5 +1,5 @@
 import type { HealthStatus } from "@/types/rpc";
-import { rpcFetch } from "@/lib/rpcBase";
+import { rpcFetch } from "@/lib/rpc";
 
 export async function fetchHealthWithSource(): Promise<
   | { ok: true; source: "live"; health: HealthStatus }

@@ -1,5 +1,5 @@
 import type { BlockDetail, BlockSummary, Transaction } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpcBase";
+import { RpcError, rpcFetch } from "@/lib/rpc";
 
 function normalizeTx(record: any, fallbackHash: string): Transaction {
   return {

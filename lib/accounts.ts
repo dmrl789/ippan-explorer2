@@ -1,5 +1,5 @@
 import type { AccountSummary } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpcBase";
+import { RpcError, rpcFetch } from "@/lib/rpc";
 
 function normalizeAccount(record: any, fallbackAddress: string): AccountSummary {
   const address = typeof record?.address === "string" ? record.address : fallbackAddress;
