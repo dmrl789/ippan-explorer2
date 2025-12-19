@@ -1,5 +1,5 @@
 import type { Transaction } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpc";
+import { safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeTx(record: any, fallbackHash: string): Transaction {
   return {
@@ -26,15 +26,13 @@ export async function fetchTransactionDetail(
   | { ok: true; source: "live"; tx: null }
   | { ok: false; source: "error"; error: string }
 > {
-  try {
-    const payload = await rpcFetch<any>(`/tx/${encodeURIComponent(hash)}`);
-    return { ok: true, source: "live", tx: normalizeTx(payload, hash) };
-  } catch (error) {
-    if (error instanceof RpcError && error.status === 404) {
-      return { ok: true, source: "live", tx: null };
-    }
-    console.error("[tx/:hash] RPC error", error);
+  const { status, data } = await safeJsonFetchWithStatus<any>(`/tx/${encodeURIComponent(hash)}`);
+  if (status === 404) {
+    return { ok: true, source: "live", tx: null };
+  }
+  if (!data) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
+  return { ok: true, source: "live", tx: normalizeTx(data, hash) };
 }
 

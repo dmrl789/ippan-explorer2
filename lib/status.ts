@@ -1,5 +1,5 @@
 import { toMsFromUs } from "./ippanTime";
-import { rpcFetch } from "./rpc";
+import { safeJsonFetch } from "./rpc";
 import type { StatusResponseV1 } from "@/types/rpc";
 
 function ensureHeadTime(status: StatusResponseV1): StatusResponseV1 {
@@ -31,11 +31,9 @@ export async function fetchStatusWithSource(): Promise<
   | { ok: true; source: "live"; status: StatusResponseV1 }
   | { ok: false; source: "error"; error: string }
 > {
-  try {
-    const status = ensureHeadTime(await rpcFetch<StatusResponseV1>("/status"));
-    return { ok: true, source: "live", status };
-  } catch (error) {
-    console.error("[status] RPC error", error);
+  const status = await safeJsonFetch<StatusResponseV1>("/status");
+  if (!status) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
+  return { ok: true, source: "live", status: ensureHeadTime(status) };
 }

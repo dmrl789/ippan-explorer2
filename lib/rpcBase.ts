@@ -1,7 +1,7 @@
-import { RpcError, buildRpcUrl, getEnvRpcBaseUrl, requireRpcBaseUrl, rpcFetch } from "./rpc";
+import { IPPAN_RPC_BASE, RpcError, buildRpcUrl, requireRpcBaseUrl, rpcFetch } from "./rpc";
 
-export function getRpcBaseUrl(): string | undefined {
-  return getEnvRpcBaseUrl();
+export function getRpcBaseUrl(): string {
+  return IPPAN_RPC_BASE;
 }
 
 // Back-compat re-exports. New code should import from "@/lib/rpc".

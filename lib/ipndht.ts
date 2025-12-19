@@ -1,5 +1,5 @@
 import type { IpndhtFileDescriptor, IpndhtHandleRecord, IpndhtProvider, IpndhtResponse } from "@/types/rpc";
-import { rpcFetch } from "./rpcBase";
+import { safeJsonFetch } from "./rpc";
 import { HASHTIMER_RE } from "./hashtimer";
 
 function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
@@ -58,43 +58,8 @@ export async function fetchIpndht(): Promise<
   | ({ ok: true; source: "live" } & Omit<IpndhtResponse, "source">)
   | ({ ok: false; source: "error"; error: string } & Omit<IpndhtResponse, "source">)
 > {
-  try {
-    const payload = await rpcFetch<any>("/ipndht");
-
-    const rawHandles: any[] =
-      Array.isArray(payload?.latest_handles) ? payload.latest_handles : Array.isArray(payload?.handles) ? payload.handles : [];
-    const rawFiles: any[] =
-      Array.isArray(payload?.latest_files) ? payload.latest_files : Array.isArray(payload?.files) ? payload.files : [];
-    const rawProviders: any[] = Array.isArray(payload?.providers) ? payload.providers : [];
-
-    const latest_handles = rawHandles.map((record, index) => normalizeHandle(record, `handle-${index}`));
-    const latest_files = rawFiles.map((record, index) => normalizeFile(record, `file-${index}`));
-    const providers: IpndhtProvider[] = rawProviders
-      .map((record: any) => ({
-        peer_id: typeof record?.peer_id === "string" ? record.peer_id : "",
-        provides: record?.provides === "handles" || record?.provides === "files" || record?.provides === "both" ? record.provides : "both"
-      }))
-      .filter((p) => p.peer_id.length > 0);
-
-    const summary = payload?.summary && typeof payload.summary === "object" ? payload.summary : {};
-
-    return {
-      ok: true,
-      source: "live",
-      sections: { handles: "live", files: "live", providers: "live", peers: "live" },
-      summary: {
-        handles_count: typeof summary.handles_count === "number" ? summary.handles_count : latest_handles.length,
-        files_count: typeof summary.files_count === "number" ? summary.files_count : latest_files.length,
-        providers_count: typeof summary.providers_count === "number" ? summary.providers_count : providers.length,
-        peers_count: typeof summary.peers_count === "number" ? summary.peers_count : 0,
-        dht_peers_count: typeof summary.dht_peers_count === "number" ? summary.dht_peers_count : undefined
-      },
-      latest_handles,
-      latest_files,
-      providers
-    };
-  } catch (error) {
-    console.error("[ipndht] RPC error", error);
+  const payload = await safeJsonFetch<any>("/ipndht");
+  if (!payload) {
     return {
       ok: false,
       source: "error",
@@ -106,4 +71,37 @@ export async function fetchIpndht(): Promise<
       providers: []
     };
   }
+
+  const rawHandles: any[] =
+    Array.isArray(payload?.latest_handles) ? payload.latest_handles : Array.isArray(payload?.handles) ? payload.handles : [];
+  const rawFiles: any[] =
+    Array.isArray(payload?.latest_files) ? payload.latest_files : Array.isArray(payload?.files) ? payload.files : [];
+  const rawProviders: any[] = Array.isArray(payload?.providers) ? payload.providers : [];
+
+  const latest_handles = rawHandles.map((record, index) => normalizeHandle(record, `handle-${index}`));
+  const latest_files = rawFiles.map((record, index) => normalizeFile(record, `file-${index}`));
+  const providers: IpndhtProvider[] = rawProviders
+    .map((record: any) => ({
+      peer_id: typeof record?.peer_id === "string" ? record.peer_id : "",
+      provides: record?.provides === "handles" || record?.provides === "files" || record?.provides === "both" ? record.provides : "both"
+    }))
+    .filter((p) => p.peer_id.length > 0);
+
+  const summary = payload?.summary && typeof payload.summary === "object" ? payload.summary : {};
+
+  return {
+    ok: true,
+    source: "live",
+    sections: { handles: "live", files: "live", providers: "live", peers: "live" },
+    summary: {
+      handles_count: typeof summary.handles_count === "number" ? summary.handles_count : latest_handles.length,
+      files_count: typeof summary.files_count === "number" ? summary.files_count : latest_files.length,
+      providers_count: typeof summary.providers_count === "number" ? summary.providers_count : providers.length,
+      peers_count: typeof summary.peers_count === "number" ? summary.peers_count : 0,
+      dht_peers_count: typeof summary.dht_peers_count === "number" ? summary.dht_peers_count : undefined
+    },
+    latest_handles,
+    latest_files,
+    providers
+  };
 }

@@ -1,5 +1,5 @@
 import type { IpndhtFileDescriptor } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpc";
+import { safeJsonFetch, safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeFile(record: any, fallbackId: string): IpndhtFileDescriptor {
   const id =
@@ -36,14 +36,12 @@ export async function fetchIpndhtFiles(): Promise<
   | { ok: true; source: "live"; files: IpndhtFileDescriptor[] }
   | { ok: false; source: "error"; error: string; files: IpndhtFileDescriptor[] }
 > {
-  try {
-    const payload = await rpcFetch<any>("/files");
-    const rawFiles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.files) ? payload.files : [];
-    return { ok: true, source: "live", files: rawFiles.map((record, idx) => normalizeFile(record, `file-${idx}`)) };
-  } catch (error) {
-    console.error("[files] RPC error", error);
+  const payload = await safeJsonFetch<any>("/files");
+  if (!payload) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", files: [] };
   }
+  const rawFiles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.files) ? payload.files : [];
+  return { ok: true, source: "live", files: rawFiles.map((record, idx) => normalizeFile(record, `file-${idx}`)) };
 }
 
 export async function fetchIpndhtFileDescriptor(
@@ -53,15 +51,13 @@ export async function fetchIpndhtFileDescriptor(
   | { ok: true; source: "live"; file: null }
   | { ok: false; source: "error"; error: string }
 > {
-  try {
-    const payload = await rpcFetch<any>(`/files/${encodeURIComponent(id)}`);
-    return { ok: true, source: "live", file: normalizeFile(payload, id) };
-  } catch (error) {
-    if (error instanceof RpcError && error.status === 404) {
-      return { ok: true, source: "live", file: null };
-    }
-    console.error("[files/:id] RPC error", error);
+  const { status, data } = await safeJsonFetchWithStatus<any>(`/files/${encodeURIComponent(id)}`);
+  if (status === 404) {
+    return { ok: true, source: "live", file: null };
+  }
+  if (!data) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
+  return { ok: true, source: "live", file: normalizeFile(data, id) };
 }
 

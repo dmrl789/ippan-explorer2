@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import SearchBar from "@/components/forms/SearchBar";
+import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
 export default function TopNav() {
-  const rpcBase = process.env.NEXT_PUBLIC_IPPAN_RPC_URL;
+  const rpcBase = IPPAN_RPC_BASE;
 
   return (
     <header className="border-b border-slate-900/80 bg-slate-950/80 backdrop-blur">
@@ -14,12 +15,9 @@ export default function TopNav() {
         </Link>
         <div className="ml-auto w-full max-w-xl">
           <SearchBar />
-          {rpcBase && (
-            <div className="mt-1 text-[10px] text-slate-500">
-              Connected to:{" "}
-              <code className="break-all rounded bg-slate-900/60 px-1 py-0.5 text-slate-300">{rpcBase}</code>
-            </div>
-          )}
+          <div className="mt-1 text-[10px] text-slate-500">
+            Connected to: <code className="break-all rounded bg-slate-900/60 px-1 py-0.5 text-slate-300">{rpcBase}</code>
+          </div>
         </div>
       </div>
     </header>
