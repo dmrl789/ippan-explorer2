@@ -13,11 +13,11 @@ type NodeStatus = {
   lastHashTimer?: string;
 };
 
-const FALLBACK_NODE_URLS: { name: string; url: string }[] = [
-  { name: "Node A", url: "http://188.245.97.41:8080" },
-  { name: "Node B", url: "http://135.181.145.174:8080" },
-  { name: "Node C", url: "http://178.156.219.107:8080" },
-  { name: "Node D", url: "http://5.223.51.238:8080" },
+const DEVNET_NODES: { name: string; url: string }[] = [
+  { name: "Node 1 (Nuremberg)", url: "http://188.245.97.41:8080" },
+  { name: "Node 2 (Helsinki)", url: "http://135.181.145.174:8080" },
+  { name: "Node 3 (Singapore)", url: "http://5.223.51.238:8080" },
+  { name: "Node 4 (Ashburn, USA)", url: "http://178.156.219.107:8080" },
 ];
 
 function normalizeBase(url: string): string {
@@ -26,7 +26,7 @@ function normalizeBase(url: string): string {
 
 function getConfiguredDevnetNodes(): { name: string; url: string }[] {
   const raw = process.env.NEXT_PUBLIC_IPPAN_DEVNET_NODES;
-  if (!raw) return FALLBACK_NODE_URLS;
+  if (!raw) return DEVNET_NODES;
 
   const urls = raw
     .split(",")
@@ -34,12 +34,15 @@ function getConfiguredDevnetNodes(): { name: string; url: string }[] {
     .filter(Boolean)
     .map(normalizeBase);
 
-  if (!urls.length) return FALLBACK_NODE_URLS;
+  if (!urls.length) return DEVNET_NODES;
 
-  return urls.map((url, idx) => ({
-    name: `Node ${String.fromCharCode("A".charCodeAt(0) + idx)}`,
-    url,
-  }));
+  return urls.map((url, idx) => {
+    const known = DEVNET_NODES.find((n) => normalizeBase(n.url) === url);
+    return {
+      name: known?.name ?? `Node ${idx + 1}`,
+      url,
+    };
+  });
 }
 
 async function fetchNodeStatus(url: string): Promise<Pick<NodeStatus, "lastRound" | "lastHashTimer"> | null> {
