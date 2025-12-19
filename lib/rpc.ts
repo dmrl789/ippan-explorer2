@@ -16,7 +16,11 @@ export function getEnvRpcBaseUrl(): string | undefined {
   return normalizeRpcBase(rawBase);
 }
 
-const RPC_BASE_URL = getEnvRpcBaseUrl() ?? "";
+// Resolve RPC base URL once, but always as a string
+const RPC_BASE_URL: string =
+  process.env.NEXT_PUBLIC_IPPAN_RPC ??
+  process.env.NEXT_PUBLIC_IPPAN_RPC_FALLBACK ??
+  "";
 
 export class RpcError extends Error {
   status: number;
@@ -35,27 +39,7 @@ export class RpcError extends Error {
 }
 
 export function requireRpcBaseUrl(): string {
-  if (RPC_BASE_URL) {
-    return RPC_BASE_URL;
-  }
-
-  const fallback =
-    normalizeRpcBase(process.env.NEXT_PUBLIC_IPPAN_RPC_FALLBACK) ??
-    normalizeRpcBase(process.env.NEXT_PUBLIC_IPPAN_RPC) ??
-    normalizeRpcBase(process.env.NEXT_PUBLIC_IPPAN_RPC_URL) ??
-    normalizeRpcBase(process.env.IPPAN_RPC_URL) ??
-    normalizeRpcBase(process.env.IPPAN_RPC_BASE) ??
-    "";
-
-  if (!fallback) {
-    // Important: do NOT throw here, or Vercel build will fail when RPC is not configured.
-    // Returning an empty string lets the UI handle "no live data" gracefully.
-    // eslint-disable-next-line no-console
-    console.warn("⚠️ No IPPAN RPC base URL defined – live devnet data disabled.");
-    return "";
-  }
-
-  return fallback;
+  return RPC_BASE_URL;
 }
 
 export function buildRpcUrl(path: string): string {
