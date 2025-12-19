@@ -9,7 +9,8 @@ export async function GET() {
       {
         ok: false,
         base: null,
-        error: "NEXT_PUBLIC_IPPAN_RPC_URL or IPPAN_RPC_URL is not set in this build",
+        error:
+          "No RPC base configured in this build. Set NEXT_PUBLIC_IPPAN_RPC_BASE (or NEXT_PUBLIC_IPPAN_RPC_URL / NEXT_PUBLIC_NODE_RPC / IPPAN_RPC_URL).",
       },
       { status: 200 },
     );

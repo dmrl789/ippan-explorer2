@@ -5,18 +5,48 @@ function normalizeRpcBase(rawBase?: string): string | undefined {
   return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
-export function getEnvRpcBaseUrl(): string | undefined {
+export const DEFAULT_RPC_BASE = "http://188.245.97.41:8080"; // fallback DevNet node
+
+function getRpcBaseFromEnv(): string | undefined {
   const rawBase =
+    process.env.NEXT_PUBLIC_IPPAN_RPC_BASE ??
+    process.env.NEXT_PUBLIC_NODE_RPC ??
+    process.env.NEXT_PUBLIC_IPPAN_RPC_URL ??
     process.env.NEXT_PUBLIC_IPPAN_RPC ??
     process.env.NEXT_PUBLIC_IPPAN_RPC_FALLBACK ??
-    process.env.NEXT_PUBLIC_IPPAN_RPC_URL ??
+    process.env.NEXT_PUBLIC_RPC_URL ??
+    process.env.NEXT_PUBLIC_EXPLORER_API ??
+    process.env.VITE_NODE_RPC ??
     process.env.IPPAN_RPC_URL ??
     process.env.IPPAN_RPC_BASE;
 
   return normalizeRpcBase(rawBase);
 }
 
-const RPC_BASE_URL = getEnvRpcBaseUrl() ?? "";
+function getRpcBase(): string {
+  const env = getRpcBaseFromEnv();
+  if (!env) {
+    // Log in dev, but do NOT crash the app
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.warn("RPC base URL missing, using fallback:", DEFAULT_RPC_BASE);
+    }
+    return DEFAULT_RPC_BASE;
+  }
+  return env;
+}
+
+/**
+ * Resolved RPC base URL used across the explorer.
+ * This is always a non-empty string (falls back to a known DevNet node).
+ */
+export const IPPAN_RPC_BASE = getRpcBase();
+
+export function getEnvRpcBaseUrl(): string | undefined {
+  return getRpcBaseFromEnv();
+}
+
+const RPC_BASE_URL = IPPAN_RPC_BASE;
 
 export class RpcError extends Error {
   status: number;
@@ -35,27 +65,7 @@ export class RpcError extends Error {
 }
 
 export function requireRpcBaseUrl(): string {
-  if (RPC_BASE_URL) {
-    return RPC_BASE_URL;
-  }
-
-  const fallback =
-    normalizeRpcBase(process.env.NEXT_PUBLIC_IPPAN_RPC_FALLBACK) ??
-    normalizeRpcBase(process.env.NEXT_PUBLIC_IPPAN_RPC) ??
-    normalizeRpcBase(process.env.NEXT_PUBLIC_IPPAN_RPC_URL) ??
-    normalizeRpcBase(process.env.IPPAN_RPC_URL) ??
-    normalizeRpcBase(process.env.IPPAN_RPC_BASE) ??
-    "";
-
-  if (!fallback) {
-    // Important: do NOT throw here, or Vercel build will fail when RPC is not configured.
-    // Returning an empty string lets the UI handle "no live data" gracefully.
-    // eslint-disable-next-line no-console
-    console.warn("⚠️ No IPPAN RPC base URL defined – live devnet data disabled.");
-    return "";
-  }
-
-  return fallback;
+  return RPC_BASE_URL;
 }
 
 export function buildRpcUrl(path: string): string {
@@ -64,9 +74,12 @@ export function buildRpcUrl(path: string): string {
   return `${base}${normalizedPath}`;
 }
 
-export async function rpcFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function safeJsonFetchWithStatusInternal<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ status: number | null; data: T | null; url: string }> {
+  const base = requireRpcBaseUrl().replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base = requireRpcBaseUrl();
   const url = `${base}${normalizedPath}`;
 
   const controller = new AbortController();
@@ -75,24 +88,74 @@ export async function rpcFetch<T>(path: string, init?: RequestInit): Promise<T> 
   try {
     const res = await fetch(url, {
       ...init,
-      signal: controller.signal,
+      signal: init?.signal ?? controller.signal,
       cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {}),
+      },
     });
 
-    clearTimeout(timeout);
-
     if (!res.ok) {
-      throw new RpcError(`RPC error ${res.status} ${res.statusText} for ${normalizedPath} (base=${base})`, {
-        status: res.status,
-        statusText: res.statusText,
-        path: normalizedPath,
-        base,
-      });
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.error(`RPC error ${res.status} for ${url}`);
+      }
+      return { status: res.status, data: null, url };
     }
 
-    return (await res.json()) as T;
+    try {
+      return { status: res.status, data: (await res.json()) as T, url };
+    } catch (err) {
+      if (typeof window !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.error("RPC JSON parse failed for", url, err);
+      }
+      return { status: res.status, data: null, url };
+    }
   } catch (err) {
+    if (typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.error("RPC fetch failed for", url, err);
+    }
+    return { status: null, data: null, url };
+  } finally {
     clearTimeout(timeout);
-    throw err;
   }
+}
+
+export async function safeJsonFetchWithStatus<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ status: number | null; data: T | null }> {
+  const { status, data } = await safeJsonFetchWithStatusInternal<T>(path, init);
+  return { status, data };
+}
+
+export async function safeJsonFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+  const { data } = await safeJsonFetchWithStatusInternal<T>(path, init);
+  return data;
+}
+
+/**
+ * Strict fetch helper that throws on RPC failures (kept for back-compat).
+ * Prefer `safeJsonFetch`/`safeJsonFetchWithStatus` for UI stability.
+ */
+export async function rpcFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = requireRpcBaseUrl();
+  const { status, data } = await safeJsonFetchWithStatusInternal<T>(normalizedPath, init);
+
+  if (data === null) {
+    const code = status ?? 0;
+    const statusText = status === null ? "FETCH_FAILED" : "ERROR";
+    throw new RpcError(`RPC error ${code} ${statusText} for ${normalizedPath} (base=${base})`, {
+      status: code,
+      statusText,
+      path: normalizedPath,
+      base,
+    });
+  }
+
+  return data;
 }

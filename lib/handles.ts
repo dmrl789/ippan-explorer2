@@ -1,5 +1,5 @@
 import type { IpndhtHandleRecord } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpc";
+import { safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
   const handle = typeof record?.handle === "string" && record.handle.length > 0 ? record.handle : fallback;
@@ -34,30 +34,18 @@ export async function fetchHandleRecord(
     `/handles?handle=${encodeURIComponent(normalized)}`
   ];
 
-  let sawNon404Error = false;
-
   for (const path of candidates) {
-    try {
-      const payload = await rpcFetch<any>(path);
-      if (payload && typeof payload === "object") {
-        const record =
-          Array.isArray(payload?.handles) && payload.handles.length
-            ? normalizeHandle(payload.handles[0], normalized)
-            : normalizeHandle(payload, normalized);
-        return { ok: true, source: "live", record };
-      }
-    } catch (error) {
-      if (error instanceof RpcError && error.status === 404) {
-        continue;
-      }
-      sawNon404Error = true;
-      console.error("[handles lookup] RPC error", error);
-      break;
-    }
-  }
+    const { status, data } = await safeJsonFetchWithStatus<any>(path);
+    if (status === 404) continue;
+    if (!data) return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
 
-  if (sawNon404Error) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+    if (data && typeof data === "object") {
+      const record =
+        Array.isArray((data as any)?.handles) && (data as any).handles.length
+          ? normalizeHandle((data as any).handles[0], normalized)
+          : normalizeHandle(data, normalized);
+      return { ok: true, source: "live", record };
+    }
   }
 
   // If all lookup variants 404, treat as "not found" (RPC reachable).

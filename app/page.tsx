@@ -6,6 +6,7 @@ import CopyButton from "@/components/common/CopyButton";
 import StatusDataTabs from "@/components/common/StatusDataTabs";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { SourceBadge } from "@/components/common/SourceBadge";
+import { DevnetStatus } from "@/components/DevnetStatus";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -61,6 +62,14 @@ export default async function DashboardPage() {
           </a>
         }
       />
+
+      <div className="text-xs text-slate-500">
+        Connected to IPPAN DevNet via <code className="rounded bg-slate-900/60 px-1 py-0.5 text-slate-300">{rpcBase}</code>
+      </div>
+
+      <Card title="DevNet status" description="Quick check against the 4 known DevNet nodes">
+        <DevnetStatus />
+      </Card>
 
       <Card
         title={orderingAnchorLabel}

@@ -1,5 +1,5 @@
 import type { BlockDetail, BlockSummary, Transaction } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpc";
+import { safeJsonFetch, safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeTx(record: any, fallbackHash: string): Transaction {
   return {
@@ -44,14 +44,13 @@ export async function fetchRecentBlocks(): Promise<
   | { ok: true; source: "live"; blocks: BlockSummary[] }
   | { ok: false; source: "error"; error: string; blocks: BlockSummary[] }
 > {
-  try {
-    const payload = await rpcFetch<any>("/blocks");
-    const rawBlocks: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.blocks) ? payload.blocks : [];
-    return { ok: true, source: "live", blocks: rawBlocks.map((b, idx) => normalizeBlockSummary(b, String(idx))) };
-  } catch (error) {
-    console.error("[blocks] RPC error", error);
+  const payload = await safeJsonFetch<any>("/blocks");
+  if (!payload) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", blocks: [] };
   }
+
+  const rawBlocks: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.blocks) ? payload.blocks : [];
+  return { ok: true, source: "live", blocks: rawBlocks.map((b, idx) => normalizeBlockSummary(b, String(idx))) };
 }
 
 export async function fetchBlockDetail(
@@ -61,15 +60,15 @@ export async function fetchBlockDetail(
   | { ok: true; source: "live"; block: null }
   | { ok: false; source: "error"; error: string }
 > {
-  try {
-    const payload = await rpcFetch<any>(`/blocks/${encodeURIComponent(id)}`);
-    return { ok: true, source: "live", block: normalizeBlockDetail(payload, id) };
-  } catch (error) {
-    if (error instanceof RpcError && error.status === 404) {
-      return { ok: true, source: "live", block: null };
-    }
-    console.error("[blocks/:id] RPC error", error);
+  const { status, data } = await safeJsonFetchWithStatus<any>(`/blocks/${encodeURIComponent(id)}`);
+
+  if (status === 404) {
+    return { ok: true, source: "live", block: null };
+  }
+  if (!data) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
+
+  return { ok: true, source: "live", block: normalizeBlockDetail(data, id) };
 }
 

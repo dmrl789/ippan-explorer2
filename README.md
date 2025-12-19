@@ -15,12 +15,24 @@ npm install
 npm run dev
 ```
 
-## RPC behavior (`NEXT_PUBLIC_IPPAN_RPC_URL` / `IPPAN_RPC_URL`)
+## RPC behavior (`NEXT_PUBLIC_IPPAN_RPC_BASE` / `NEXT_PUBLIC_IPPAN_RPC_URL` / `IPPAN_RPC_URL`)
 
-The explorer requires a reachable IPPAN devnet RPC endpoint. Configure the base URL via `NEXT_PUBLIC_IPPAN_RPC_URL` (set this in Vercel env vars for deploys). Server components and API routes also honor a private `IPPAN_RPC_URL` or `IPPAN_RPC_BASE` env var if you prefer not to expose the base URL to the client; using either ensures the app fetches live devnet data.
+The explorer requires a reachable IPPAN DevNet RPC endpoint.
+
+- **Preferred**: set `NEXT_PUBLIC_IPPAN_RPC_BASE` (or `NEXT_PUBLIC_IPPAN_RPC_URL`) in Vercel env vars.
+- **Also supported**: `NEXT_PUBLIC_NODE_RPC`, `VITE_NODE_RPC`, `IPPAN_RPC_URL`, `IPPAN_RPC_BASE`.
+- **Fallback**: if nothing is configured, the explorer falls back to `http://188.245.97.41:8080` (DevNet) and renders a visible “DevNet status” panel so misconfiguration is obvious.
 
 - **No mocks**: the production explorer never falls back to mock/demo data.
 - **If RPC is unreachable**: pages show **“Devnet RPC unavailable”** (and API routes return `{ ok: false }`) rather than faking state.
+
+### DevNet node list (optional)
+
+Set `NEXT_PUBLIC_IPPAN_DEVNET_NODES` to a comma-separated list to power the DevNet status panel:
+
+```bash
+NEXT_PUBLIC_IPPAN_DEVNET_NODES="http://188.245.97.41:8080,http://135.181.145.174:8080,http://178.156.219.107:8080,http://5.223.51.238:8080"
+```
 
 ## Pages
 

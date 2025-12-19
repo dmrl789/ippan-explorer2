@@ -1,5 +1,5 @@
 import type { AccountSummary } from "@/types/rpc";
-import { RpcError, rpcFetch } from "@/lib/rpc";
+import { safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeAccount(record: any, fallbackAddress: string): AccountSummary {
   const address = typeof record?.address === "string" ? record.address : fallbackAddress;
@@ -28,15 +28,13 @@ export async function fetchAccountSummary(
   | { ok: true; source: "live"; account: null }
   | { ok: false; source: "error"; error: string }
 > {
-  try {
-    const payload = await rpcFetch<any>(`/accounts/${encodeURIComponent(address)}`);
-    return { ok: true, source: "live", account: normalizeAccount(payload, address) };
-  } catch (error) {
-    if (error instanceof RpcError && error.status === 404) {
-      return { ok: true, source: "live", account: null };
-    }
-    console.error("[accounts/:address] RPC error", error);
+  const { status, data } = await safeJsonFetchWithStatus<any>(`/accounts/${encodeURIComponent(address)}`);
+  if (status === 404) {
+    return { ok: true, source: "live", account: null };
+  }
+  if (!data) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
+  return { ok: true, source: "live", account: normalizeAccount(data, address) };
 }
 
