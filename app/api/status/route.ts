@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rpcFetch } from "@/lib/rpc";
+import { rpcFetch, IPPAN_RPC_BASE } from "@/lib/rpc";
 
 export async function GET() {
   try {
@@ -11,11 +11,20 @@ export async function GET() {
 
     // Required: /status and /health must work
     if (statusRes.status !== "fulfilled" || healthRes.status !== "fulfilled") {
+      // Extract error details for debugging
+      const statusError = statusRes.status === "rejected" ? statusRes.reason : null;
+      const healthError = healthRes.status === "rejected" ? healthRes.reason : null;
+      
       return NextResponse.json(
         {
           ok: false,
           source: "live",
           error: "Required devnet endpoints `/status` or `/health` are unavailable",
+          rpc_base: IPPAN_RPC_BASE,
+          error_details: {
+            status_error: statusError?.message ?? String(statusError),
+            health_error: healthError?.message ?? String(healthError),
+          },
         },
         { status: 502 },
       );
@@ -32,6 +41,7 @@ export async function GET() {
         health: healthRes.value,
         ai,
         aiAvailable: ai !== null,
+        rpc_base: IPPAN_RPC_BASE,
       },
       { status: 200 },
     );
@@ -42,6 +52,8 @@ export async function GET() {
         ok: false,
         source: "live",
         error: "IPPAN devnet RPC unavailable",
+        rpc_base: IPPAN_RPC_BASE,
+        error_details: err?.message ?? String(err),
       },
       { status: 502 },
     );
