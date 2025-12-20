@@ -46,6 +46,24 @@ export function getEnvRpcBaseUrl(): string | undefined {
   return getRpcBaseFromEnv();
 }
 
+/**
+ * Default canonical DevNet nodes (Nuremberg, Helsinki, Singapore, Ashburn).
+ */
+const DEFAULT_DEVNET_NODES =
+  "http://188.245.97.41:8080," +
+  "http://135.181.145.174:8080," +
+  "http://5.223.51.238:8080," +
+  "http://178.156.219.107:8080";
+
+const RAW_DEVNET = process.env.NEXT_PUBLIC_IPPAN_DEVNET_NODES ?? DEFAULT_DEVNET_NODES;
+
+/**
+ * List of DevNet node URLs for multi-node status checks.
+ */
+export const DEVNET_NODES: string[] = RAW_DEVNET.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 const RPC_BASE_URL = IPPAN_RPC_BASE;
 
 export class RpcError extends Error {
