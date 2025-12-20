@@ -31,10 +31,18 @@ The explorer requires a reachable IPPAN DevNet RPC endpoint.
 Set `NEXT_PUBLIC_IPPAN_DEVNET_NODES` to a comma-separated list to power the DevNet status panel:
 
 ```bash
-NEXT_PUBLIC_IPPAN_DEVNET_NODES="http://188.245.97.41:8080,http://135.181.145.174:8080,http://178.156.219.107:8080,http://5.223.51.238:8080"
+NEXT_PUBLIC_IPPAN_DEVNET_NODES="http://188.245.97.41:8080,http://135.181.145.174:8080,http://5.223.51.238:8080,http://178.156.219.107:8080"
 ```
 
+The canonical node ordering is:
+- Node 1: Nuremberg (`188.245.97.41:8080`)
+- Node 2: Helsinki (`135.181.145.174:8080`)
+- Node 3: Singapore (`5.223.51.238:8080`)
+- Node 4: Ashburn, USA (`178.156.219.107:8080`)
+
 ## Pages
+
+This explorer is wired to the current IPPAN DevNet (Nuremberg, Helsinki, Singapore, Ashburn) and never shows mocked data.
 
 - `/` – Dashboard: truthful L1 snapshot + peers + IPNDHT + links to L2.
 - `/blocks` – Latest blocks, plus `/blocks/[id]` for block details + transactions.
