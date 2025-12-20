@@ -36,7 +36,18 @@ export default async function IpndhtPage() {
         description="Data from devnet RPC"
         headerSlot={<SourceBadge source={data.source} />}
       >
-        {!data.ok && <p className="mb-3 text-sm text-slate-400">{data.error ?? "IPPAN devnet RPC unavailable."}</p>}
+        {!data.ok && (
+          <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
+            <p className="text-sm text-amber-200/80">
+              {"errorCode" in data && data.errorCode === "endpoint_not_available"
+                ? "IPNDHT endpoint not implemented yet on this DevNet (404 expected)."
+                : data.error ?? "IPPAN devnet RPC unavailable."}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              The DevNet node is online (check /status), but the /ipndht endpoint may not be implemented yet.
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <SourceBadge source={data.sections?.handles ?? data.source} label={`Handles: ${data.sections?.handles === "live" ? "devnet" : "error"}`} />
           <SourceBadge source={data.sections?.files ?? data.source} label={`Files: ${data.sections?.files === "live" ? "devnet" : "error"}`} />

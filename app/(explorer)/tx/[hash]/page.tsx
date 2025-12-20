@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import JsonViewer from "@/components/common/JsonViewer";
 import { SourceBadge } from "@/components/common/SourceBadge";
@@ -16,19 +15,59 @@ interface TransactionPageProps {
 
 export default async function TransactionDetailPage({ params }: TransactionPageProps) {
   const result = await fetchTransactionDetail(params.hash);
+  
+  // Handle RPC errors
   if (!result.ok) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Transaction" description={shortenHash(params.hash)} actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back</Link>} />
-        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
-          <p className="text-sm text-slate-400">{result.error}</p>
+        <PageHeader 
+          title="Transaction" 
+          description={shortenHash(params.hash)} 
+          actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back</Link>} 
+        />
+        <Card title="DevNet RPC Error" headerSlot={<SourceBadge source="error" />}>
+          <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4">
+            <p className="text-sm text-red-200/80">{result.error}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              The DevNet node may be temporarily unavailable. Try again in a moment.
+            </p>
+          </div>
         </Card>
       </div>
     );
   }
+  
+  // Handle transaction not found (404 from DevNet)
   if (!result.tx) {
-    notFound();
+    const notFoundReason = "notFoundReason" in result && result.notFoundReason
+      ? result.notFoundReason
+      : "Transaction not found on this DevNet.";
+    
+    return (
+      <div className="space-y-6">
+        <PageHeader 
+          title="Transaction Not Found" 
+          description={shortenHash(params.hash)} 
+          actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back</Link>} 
+        />
+        <Card title="Transaction Not Found" headerSlot={<SourceBadge source="live" />}>
+          <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
+            <p className="text-sm text-amber-200/80">{notFoundReason}</p>
+            <div className="mt-3 text-xs text-slate-500">
+              <p className="font-mono break-all">Hash: {params.hash}</p>
+              <p className="mt-1">This could mean:</p>
+              <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                <li>The transaction hash is incorrect</li>
+                <li>The transaction hasn&apos;t been processed yet</li>
+                <li>The transaction was never submitted to this DevNet</li>
+              </ul>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
   }
+  
   const resolvedTx = result.tx;
   const txIppanMs =
     resolvedTx.ippan_time_ms ??

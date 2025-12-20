@@ -48,7 +48,18 @@ export default async function FilesPage({ searchParams }: FilesPageProps) {
         description="Search by file id, owner address, or tag"
         headerSlot={<SourceBadge source={result.source} />}
       >
-        {!result.ok && <p className="mb-3 text-sm text-slate-400">{result.error ?? "IPPAN devnet RPC unavailable."}</p>}
+        {!result.ok && (
+          <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
+            <p className="text-sm text-amber-200/80">
+              {"errorCode" in result && result.errorCode === "endpoint_not_available"
+                ? "Files endpoint not implemented yet on this DevNet (404 expected)."
+                : result.error ?? "IPPAN devnet RPC unavailable."}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              The DevNet node is online (check /status), but the /files endpoint may not be implemented yet.
+            </p>
+          </div>
+        )}
         <FileSearchForm />
       </Card>
 

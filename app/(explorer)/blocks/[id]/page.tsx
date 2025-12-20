@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import SimpleTable from "@/components/tables/SimpleTable";
 import JsonViewer from "@/components/common/JsonViewer";
 import { SourceBadge } from "@/components/common/SourceBadge";
@@ -16,18 +15,49 @@ interface BlockDetailPageProps {
 
 export default async function BlockDetailPage({ params }: BlockDetailPageProps) {
   const result = await fetchBlockDetail(params.id);
+  
+  // Handle RPC errors
   if (!result.ok) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Block" description={`#${params.id}`} actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} />
-        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
-          <p className="text-sm text-slate-400">{result.error}</p>
+        <PageHeader 
+          title="Block" 
+          description={`#${params.id}`} 
+          actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} 
+        />
+        <Card title="DevNet RPC Error" headerSlot={<SourceBadge source="error" />}>
+          <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4">
+            <p className="text-sm text-red-200/80">{result.error}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              The DevNet node may be temporarily unavailable or the /blocks endpoint is not implemented yet.
+            </p>
+          </div>
         </Card>
       </div>
     );
   }
+  
+  // Handle block not found (404 from DevNet)
   if (!result.block) {
-    notFound();
+    return (
+      <div className="space-y-6">
+        <PageHeader 
+          title="Block Not Found" 
+          description={`#${params.id}`} 
+          actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} 
+        />
+        <Card title="Block Not Found" headerSlot={<SourceBadge source="live" />}>
+          <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
+            <p className="text-sm text-amber-200/80">
+              Block #{params.id} was not found on this DevNet.
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              This could mean the block ID is incorrect, or the block hasn&apos;t been created yet.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
   }
   const resolvedBlock = result.block;
   const blockIppanMs =
