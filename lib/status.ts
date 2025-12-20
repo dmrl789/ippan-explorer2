@@ -1,39 +1,62 @@
-import { toMsFromUs } from "./ippanTime";
 import { safeJsonFetch } from "./rpc";
-import type { StatusResponseV1 } from "@/types/rpc";
 
-function ensureHeadTime(status: StatusResponseV1): StatusResponseV1 {
-  const head = { ...status.head };
-
-  let headMs = head.ippan_time_ms;
-  if (headMs === undefined && head.ippan_time_us) {
-    headMs = toMsFromUs(head.ippan_time_us);
-  }
-  if (headMs === undefined && head.ippan_time) {
-    headMs = new Date(head.ippan_time).getTime();
-  }
-  if (headMs === undefined) {
-    headMs = Date.now();
-  }
-
-  head.ippan_time_ms = headMs;
-  if (!head.ippan_time_us) {
-    head.ippan_time_us = (BigInt(Math.trunc(headMs)) * 1000n).toString();
-  }
-  if (!head.ippan_time) {
-    head.ippan_time = new Date(headMs).toISOString();
-  }
-
-  return { ...status, head };
+/**
+ * Actual DevNet node /status response (status_schema_version: 2).
+ * This is what the live nodes return, distinct from the legacy StatusResponseV1.
+ */
+export interface DevNetNodeStatus {
+  node_id: string;
+  version: string;
+  build_sha?: string;
+  status: string; // "ok"
+  status_schema_version: number;
+  network_active: boolean;
+  peer_count: number;
+  mempool_size: number;
+  uptime_seconds: number;
+  requests_served: number;
+  ai: {
+    enabled: boolean;
+    using_stub: boolean;
+    model_hash: string;
+    model_version: string;
+    consensus_mode: string; // "DLC"
+    shadow_configured?: boolean;
+    shadow_loaded?: boolean;
+    shadow_model_hash?: string;
+    shadow_model_version?: string;
+  };
+  consensus: {
+    round: number;
+    self_id: string;
+    metrics_available: boolean;
+    metrics_placeholder?: boolean;
+    validator_ids: string[];
+    validators: Record<string, {
+      blocks_proposed: number;
+      blocks_verified: number;
+      honesty: number;
+      latency: number;
+      rounds_active: number;
+      slashing_events_90d: number;
+      stake: { micro_ipn: string };
+      uptime: number;
+    }>;
+  };
+  dataset_export?: {
+    enabled: boolean;
+    last_age_seconds: number;
+    last_ts_utc: string;
+  };
 }
 
 export async function fetchStatusWithSource(): Promise<
-  | { ok: true; source: "live"; status: StatusResponseV1 }
+  | { ok: true; source: "live"; status: DevNetNodeStatus }
   | { ok: false; source: "error"; error: string }
 > {
-  const status = await safeJsonFetch<StatusResponseV1>("/status");
-  if (!status) {
+  const status = await safeJsonFetch<DevNetNodeStatus>("/status");
+  if (!status || !status.node_id) {
     return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
   }
-  return { ok: true, source: "live", status: ensureHeadTime(status) };
+  return { ok: true, source: "live", status };
 }
