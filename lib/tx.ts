@@ -23,16 +23,32 @@ export async function fetchTransactionDetail(
   hash: string
 ): Promise<
   | { ok: true; source: "live"; tx: Transaction }
-  | { ok: true; source: "live"; tx: null }
-  | { ok: false; source: "error"; error: string }
+  | { ok: true; source: "live"; tx: null; notFoundReason?: string }
+  | { ok: false; source: "error"; error: string; errorCode?: string }
 > {
   const { status, data } = await safeJsonFetchWithStatus<any>(`/tx/${encodeURIComponent(hash)}`);
+  
   if (status === 404) {
-    return { ok: true, source: "live", tx: null };
+    return {
+      ok: true,
+      source: "live",
+      tx: null,
+      notFoundReason: "Transaction not found on this DevNet. The transaction may not exist, or the DevNet may not have recorded it yet."
+    };
   }
+  
   if (!data) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+    const errorCode = status === null ? "rpc_unavailable" : "unknown_error";
+    return {
+      ok: false,
+      source: "error",
+      error: status === null
+        ? "IPPAN devnet RPC unavailable"
+        : `Unexpected error fetching transaction (HTTP ${status})`,
+      errorCode
+    };
   }
+  
   return { ok: true, source: "live", tx: normalizeTx(data, hash) };
 }
 

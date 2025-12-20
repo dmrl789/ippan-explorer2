@@ -1,5 +1,5 @@
 import type { BlockDetail, BlockSummary, Transaction } from "@/types/rpc";
-import { safeJsonFetch, safeJsonFetchWithStatus } from "@/lib/rpc";
+import { safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeTx(record: any, fallbackHash: string): Transaction {
   return {
@@ -42,11 +42,29 @@ function normalizeBlockDetail(record: any, fallbackId: string): BlockDetail {
 
 export async function fetchRecentBlocks(): Promise<
   | { ok: true; source: "live"; blocks: BlockSummary[] }
-  | { ok: false; source: "error"; error: string; blocks: BlockSummary[] }
+  | { ok: false; source: "error"; error: string; errorCode?: string; blocks: BlockSummary[] }
 > {
-  const payload = await safeJsonFetch<any>("/blocks");
+  const { status, data: payload } = await safeJsonFetchWithStatus<any>("/blocks");
+  
+  // DevNet may not expose /blocks endpoint yet (404)
+  if (status === 404) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Block list endpoint not available on this DevNet (404). The node is online but does not expose /blocks yet.",
+      errorCode: "endpoint_not_available",
+      blocks: []
+    };
+  }
+  
   if (!payload) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", blocks: [] };
+    return {
+      ok: false,
+      source: "error",
+      error: "IPPAN devnet RPC unavailable",
+      errorCode: "rpc_unavailable",
+      blocks: []
+    };
   }
 
   const rawBlocks: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.blocks) ? payload.blocks : [];

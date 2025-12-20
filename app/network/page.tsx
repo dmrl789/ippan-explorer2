@@ -35,7 +35,11 @@ export default async function NetworkPage() {
         description="Libp2p peer announcements with agent and address context"
         headerSlot={<SourceBadge source={peerData.source} />}
       >
-        {!peerData.ok && <p className="mb-3 text-sm text-slate-400">{peerData.error ?? "IPPAN devnet RPC unavailable."}</p>}
+        {!peerData.ok && (
+          <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
+            <p className="text-sm text-amber-200/80">{peerData.error ?? "IPPAN devnet RPC unavailable."}</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-3xl font-semibold text-emerald-100">{peerData.peers.length}</p>
@@ -76,7 +80,13 @@ export default async function NetworkPage() {
             { key: "last_seen_ms", header: "Last seen", render: (row) => formatLastSeen(row.last_seen_ms) }
           ]}
         />
-        {!ipndht.ok && <p className="mt-3 text-sm text-slate-400">No IPNDHT context – devnet RPC unavailable.</p>}
+        {!ipndht.ok && (
+          <p className="mt-3 text-sm text-slate-400">
+            {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
+              ? "IPNDHT context not available (endpoint not implemented on this DevNet)."
+              : "No IPNDHT context – devnet RPC unavailable."}
+          </p>
+        )}
       </Card>
     </div>
   );

@@ -69,7 +69,18 @@ export default async function L2Page() {
           <Detail label="Providers" value={ipndht.summary.providers_count === undefined ? "—" : ipndht.summary.providers_count.toLocaleString()} />
           <Detail label="DHT peers" value={ipndht.summary.dht_peers_count === undefined ? "—" : ipndht.summary.dht_peers_count.toLocaleString()} />
         </div>
-        {!ipndht.ok && <p className="mt-3 text-sm text-slate-400">{ipndht.error ?? "IPPAN devnet RPC unavailable."}</p>}
+        {!ipndht.ok && (
+          <div className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
+            <p className="text-sm text-amber-200/80">
+              {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
+                ? "IPNDHT endpoint not implemented yet on this DevNet (404 expected)."
+                : ipndht.error ?? "IPPAN devnet RPC unavailable."}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              The DevNet node is online. IPNDHT features will be available once the endpoint is implemented.
+            </p>
+          </div>
+        )}
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

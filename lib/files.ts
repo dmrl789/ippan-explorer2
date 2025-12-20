@@ -1,5 +1,5 @@
 import type { IpndhtFileDescriptor } from "@/types/rpc";
-import { safeJsonFetch, safeJsonFetchWithStatus } from "@/lib/rpc";
+import { safeJsonFetchWithStatus } from "@/lib/rpc";
 
 function normalizeFile(record: any, fallbackId: string): IpndhtFileDescriptor {
   const id =
@@ -34,12 +34,31 @@ function normalizeFile(record: any, fallbackId: string): IpndhtFileDescriptor {
 
 export async function fetchIpndhtFiles(): Promise<
   | { ok: true; source: "live"; files: IpndhtFileDescriptor[] }
-  | { ok: false; source: "error"; error: string; files: IpndhtFileDescriptor[] }
+  | { ok: false; source: "error"; error: string; errorCode?: string; files: IpndhtFileDescriptor[] }
 > {
-  const payload = await safeJsonFetch<any>("/files");
-  if (!payload) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", files: [] };
+  const { status, data: payload } = await safeJsonFetchWithStatus<any>("/files");
+  
+  // DevNet may not expose /files endpoint yet (404)
+  if (status === 404) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Files endpoint not available on this DevNet (404). The node is online but does not expose /files yet.",
+      errorCode: "endpoint_not_available",
+      files: []
+    };
   }
+  
+  if (!payload) {
+    return {
+      ok: false,
+      source: "error",
+      error: "IPPAN devnet RPC unavailable",
+      errorCode: "rpc_unavailable",
+      files: []
+    };
+  }
+  
   const rawFiles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.files) ? payload.files : [];
   return { ok: true, source: "live", files: rawFiles.map((record, idx) => normalizeFile(record, `file-${idx}`)) };
 }

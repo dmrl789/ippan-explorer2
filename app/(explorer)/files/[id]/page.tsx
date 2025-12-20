@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import JsonViewer from "@/components/common/JsonViewer";
 import { SourceBadge } from "@/components/common/SourceBadge";
@@ -23,18 +22,49 @@ function extractUris(retrieval: Record<string, unknown> | undefined): string[] {
 
 export default async function FilePage({ params }: FilePageProps) {
   const result = await fetchIpndhtFileDescriptor(params.id);
+  
+  // Handle RPC errors
   if (!result.ok) {
     return (
       <div className="space-y-6">
-        <PageHeader title="File" description={params.id} actions={<Link href="/files" className="text-sm text-slate-400 hover:text-slate-100">← Back to files</Link>} />
-        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
-          <p className="text-sm text-slate-400">{result.error}</p>
+        <PageHeader 
+          title="File" 
+          description={params.id} 
+          actions={<Link href="/files" className="text-sm text-slate-400 hover:text-slate-100">← Back to files</Link>} 
+        />
+        <Card title="DevNet RPC Error" headerSlot={<SourceBadge source="error" />}>
+          <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4">
+            <p className="text-sm text-red-200/80">{result.error}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              The DevNet node may be temporarily unavailable or the /files endpoint is not implemented yet.
+            </p>
+          </div>
         </Card>
       </div>
     );
   }
+  
+  // Handle file not found (404 from DevNet)
   if (!result.file) {
-    notFound();
+    return (
+      <div className="space-y-6">
+        <PageHeader 
+          title="File Not Found" 
+          description={params.id} 
+          actions={<Link href="/files" className="text-sm text-slate-400 hover:text-slate-100">← Back to files</Link>} 
+        />
+        <Card title="File Not Found" headerSlot={<SourceBadge source="live" />}>
+          <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
+            <p className="text-sm text-amber-200/80">
+              File descriptor not found on this DevNet.
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              The file ID may be incorrect, or the file has not been registered with IPNDHT on this DevNet.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
   }
   const resolvedFile = result.file;
   const doctype = typeof resolvedFile.meta?.doctype === "string" ? resolvedFile.meta.doctype : undefined;

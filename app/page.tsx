@@ -189,7 +189,16 @@ export default async function DashboardPage() {
               <DetailItem label="DHT peers" value={ipndht.summary.dht_peers_count !== undefined ? ipndht.summary.dht_peers_count.toLocaleString() : "—"} />
             </div>
           ) : (
-            <p className="text-sm text-slate-400">IPNDHT endpoint not available (404 expected on this DevNet).</p>
+            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">
+                {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
+                  ? "IPNDHT endpoint not implemented yet (404 expected for this DevNet)."
+                  : "IPNDHT endpoint not available."}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                This is normal during early DevNet phases. The node is online.
+              </p>
+            </div>
           )}
         </Card>
       </div>

@@ -1,5 +1,5 @@
 import type { IpndhtFileDescriptor, IpndhtHandleRecord, IpndhtProvider, IpndhtResponse } from "@/types/rpc";
-import { safeJsonFetch } from "./rpc";
+import { safeJsonFetchWithStatus } from "./rpc";
 import { HASHTIMER_RE } from "./hashtimer";
 
 function normalizeHandle(record: any, fallback: string): IpndhtHandleRecord {
@@ -56,14 +56,31 @@ function normalizeFile(record: any, fallback: string): IpndhtFileDescriptor {
 
 export async function fetchIpndht(): Promise<
   | ({ ok: true; source: "live" } & Omit<IpndhtResponse, "source">)
-  | ({ ok: false; source: "error"; error: string } & Omit<IpndhtResponse, "source">)
+  | ({ ok: false; source: "error"; error: string; errorCode?: string } & Omit<IpndhtResponse, "source">)
 > {
-  const payload = await safeJsonFetch<any>("/ipndht");
+  const { status, data: payload } = await safeJsonFetchWithStatus<any>("/ipndht");
+  
+  // DevNet may not expose /ipndht endpoint yet (404 is expected)
+  if (status === 404) {
+    return {
+      ok: false,
+      source: "error",
+      error: "IPNDHT endpoint not available on this DevNet (404). This is expected while IPNDHT is being implemented.",
+      errorCode: "endpoint_not_available",
+      sections: { handles: "error", files: "error", providers: "error", peers: "error" },
+      summary: { handles_count: 0, files_count: 0, peers_count: 0 },
+      latest_handles: [],
+      latest_files: [],
+      providers: []
+    };
+  }
+  
   if (!payload) {
     return {
       ok: false,
       source: "error",
       error: "IPPAN devnet RPC unavailable",
+      errorCode: "rpc_unavailable",
       sections: { handles: "error", files: "error", providers: "error", peers: "error" },
       summary: { handles_count: 0, files_count: 0, peers_count: 0 },
       latest_handles: [],
