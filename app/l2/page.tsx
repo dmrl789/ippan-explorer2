@@ -52,13 +52,10 @@ export default async function L2Page() {
       <Card title="Current L1 context" description="Snapshot from /status" headerSlot={<SourceBadge source={statusSource} />}>
         {status ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Detail
-              label="Round"
-              value={(status.head.round_id ?? status.head.round_height) !== undefined ? `#${(status.head.round_id ?? status.head.round_height)!.toLocaleString()}` : "—"}
-            />
-            <Detail label="Block height" value={`#${status.head.block_height.toLocaleString()}`} />
-            <Detail label="Epoch" value={`Epoch ${status.live.current_epoch}`} />
-            <Detail label="Epoch progress" value={`${status.live.epoch_progress_pct}%`} />
+            <Detail label="Node ID" value={status.node_id} />
+            <Detail label="Consensus Round" value={`#${status.consensus.round}`} />
+            <Detail label="Peer Count" value={status.peer_count.toString()} />
+            <Detail label="Network Active" value={status.network_active ? "Yes" : "No"} />
           </div>
         ) : (
           <p className="text-sm text-slate-400">{statusRes.ok ? "Status unavailable." : statusRes.error}</p>

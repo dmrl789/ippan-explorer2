@@ -1,30 +1,27 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { Suspense, type ReactNode } from "react";
-import { DashboardGraphs } from "@/components/DashboardGraphs";
+import { type ReactNode } from "react";
 import CopyButton from "@/components/common/CopyButton";
-import StatusDataTabs from "@/components/common/StatusDataTabs";
-import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { DevnetStatus } from "@/components/DevnetStatus";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { formatMs } from "@/lib/ippanTime";
 import { fetchStatusWithSource } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
 import { fetchIpndht } from "@/lib/ipndht";
-import {
-  LABEL_FINALIZED_ROUND_INDEX,
-  LABEL_IPPAN_TIME,
-  LABEL_LATEST_FINALIZED_HASHTIMER,
-  LABEL_LATEST_OBSERVED_HASHTIMER_LOCAL,
-  TIP_FINALIZED_ROUND_INDEX,
-  TIP_IPPAN_TIME,
-  TIP_LATEST_FINALIZED_HASHTIMER,
-  TIP_LATEST_OBSERVED_HASHTIMER_LOCAL
-} from "@/lib/terminology";
+
+function formatUptime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return `${days}d ${remainingHours}h`;
+  }
+  return `${hours}h ${minutes}m`;
+}
 
 export default async function DashboardPage() {
   const [statusRes, peersRes, ipndht] = await Promise.all([fetchStatusWithSource(), fetchPeers(), fetchIpndht()]);
@@ -34,17 +31,11 @@ export default async function DashboardPage() {
   const peers = peersRes.peers;
   const peersSource = peersRes.ok ? peersRes.source : "error";
 
-  const observedRoundId = status?.head.round_id ?? status?.head.round_height;
-  const validatorsOnline = status?.live.validators_online ?? status?.live.active_operators;
-  const latestFinalizedRound = status?.latest_rounds?.find((round) => round.finalized);
-  const latestFinalizedHashTimer = latestFinalizedRound?.end_hash_timer_id;
-  const finalizedRoundIndex = status?.counters?.finalized_rounds ?? latestFinalizedRound?.round_height;
-
-  const orderingAnchorHashTimer = latestFinalizedHashTimer ?? status?.head.hash_timer_id;
-  const orderingAnchorLabel = latestFinalizedHashTimer
-    ? LABEL_LATEST_FINALIZED_HASHTIMER
-    : LABEL_LATEST_OBSERVED_HASHTIMER_LOCAL;
-  const orderingAnchorTip = latestFinalizedHashTimer ? TIP_LATEST_FINALIZED_HASHTIMER : TIP_LATEST_OBSERVED_HASHTIMER_LOCAL;
+  // DevNet is considered OK if we got valid status data
+  const devnetOk = statusRes.ok && status?.status === "ok";
+  
+  // Get validator count from consensus data
+  const validatorCount = status?.consensus?.validator_ids?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -71,58 +62,30 @@ export default async function DashboardPage() {
         <DevnetStatus />
       </Card>
 
+      {/* Main Node Status Card */}
       <Card
-        title={orderingAnchorLabel}
-        description="Ordering anchor derived from rounds and HashTimers"
+        title="Node Status"
+        description="Live status from the connected DevNet node"
         headerSlot={
-          orderingAnchorHashTimer ? <CopyButton text={orderingAnchorHashTimer} label="Copy HashTimer" /> : undefined
+          status?.node_id ? <CopyButton text={status.node_id} label="Copy Node ID" /> : undefined
         }
       >
-        {status ? (
+        {devnetOk && status ? (
           <>
             <div className="flex flex-wrap items-center gap-3 text-base">
-              {orderingAnchorHashTimer ? (
-                <HashTimerValue
-                  id={orderingAnchorHashTimer}
-                  linkClassName="font-mono text-lg text-emerald-100 underline-offset-4 hover:underline"
-                />
-              ) : (
-                <span className="font-mono text-lg text-slate-300">—</span>
-              )}
-              <StatusPill status={status.head.finalized ? "ok" : "warn"} />
+              <span className="font-mono text-lg text-emerald-100">{status.node_id}</span>
+              <StatusPill status={status.network_active ? "ok" : "warn"} />
               <SourceBadge source={statusSource} />
-              {status.head.hash_timer_seq && (
-                <span className="rounded-full bg-slate-800/70 px-3 py-1 text-xs text-slate-300">Seq {status.head.hash_timer_seq}</span>
-              )}
+              <span className="rounded-full bg-slate-800/70 px-3 py-1 text-xs text-slate-300">v{status.version}</span>
             </div>
-            <p className="mt-2 text-sm text-slate-400">{orderingAnchorTip}</p>
-            <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-4">
-              <DetailItem
-                label={LABEL_IPPAN_TIME}
-                value={status.head.ippan_time_ms.toLocaleString()}
-                secondary={`UTC ${formatMs(status.head.ippan_time_ms)}`}
-                tooltip={TIP_IPPAN_TIME}
-              />
-              <DetailItem
-                label={LABEL_FINALIZED_ROUND_INDEX}
-                value={finalizedRoundIndex !== undefined ? `#${finalizedRoundIndex.toLocaleString()}` : "—"}
-                tooltip={TIP_FINALIZED_ROUND_INDEX}
-              />
-              <DetailItem
-                label={LABEL_LATEST_FINALIZED_HASHTIMER}
-                value={
-                  latestFinalizedHashTimer ? (
-                    <HashTimerValue
-                      id={latestFinalizedHashTimer}
-                      linkClassName="font-mono text-sm text-emerald-100 underline-offset-4 hover:underline"
-                    />
-                  ) : (
-                    "—"
-                  )
-                }
-                tooltip={TIP_LATEST_FINALIZED_HASHTIMER}
-              />
-              <DetailItem label="Finalized" value={status.head.finalized ? "Finalized" : "Pending"} />
+            <p className="mt-2 text-sm text-slate-400">
+              {status.network_active ? "Network active" : "Network inactive"} · {status.peer_count} peers · Round #{status.consensus.round}
+            </p>
+            <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-4">
+              <DetailItem label="Uptime" value={formatUptime(status.uptime_seconds)} />
+              <DetailItem label="Peer Count" value={status.peer_count.toString()} />
+              <DetailItem label="Mempool Size" value={status.mempool_size.toString()} />
+              <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
             </div>
           </>
         ) : (
@@ -137,7 +100,7 @@ export default async function DashboardPage() {
             href={"/blocks" as Route}
             source={statusSource}
             subtitle="DAG blocks + transactions"
-            value={status ? `DAG block #${status.head.block_height.toLocaleString()}` : "—"}
+            value={devnetOk ? "Browse blocks" : "—"}
           />
           <FeatureCard
             title="Accounts & payments"
@@ -149,9 +112,9 @@ export default async function DashboardPage() {
           <FeatureCard
             title="IPNDHT"
             href={"/ipndht" as Route}
-            source={ipndht.source}
+            source={ipndht.ok ? ipndht.source : "error"}
             subtitle="Handles + Files + Providers"
-            value={`${ipndht.summary.handles_count} handles · ${ipndht.summary.files_count} files`}
+            value={ipndht.ok ? `${ipndht.summary.handles_count} handles · ${ipndht.summary.files_count} files` : "Not available"}
           />
           <FeatureCard
             title="Network"
@@ -163,7 +126,7 @@ export default async function DashboardPage() {
           <FeatureCard
             title="L2 modules"
             href={"/l2" as Route}
-            source={ipndht.source}
+            source={ipndht.ok ? ipndht.source : "error"}
             subtitle="AI + InfoLAW + more"
             value="View modules"
           />
@@ -172,40 +135,23 @@ export default async function DashboardPage() {
             href={"/status" as Route}
             source={statusSource}
             subtitle="Operator + AI"
-            value={`${LABEL_FINALIZED_ROUND_INDEX} #${finalizedRoundIndex?.toLocaleString() ?? "—"} · ${validatorsOnline ?? "—"} online`}
+            value={devnetOk ? `${validatorCount} validators` : "—"}
           />
         </div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card
-          title="L1 consensus snapshot"
-          description="Fields sourced from /status (no invented totals)"
+          title="Consensus & Validators"
+          description="Validator metrics from /status"
           headerSlot={<SourceBadge source={statusSource} />}
         >
-          {status ? (
+          {devnetOk && status ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <DetailItem
-                label={LABEL_IPPAN_TIME}
-                value={status.head.ippan_time_ms.toLocaleString()}
-                secondary={`UTC ${formatMs(status.head.ippan_time_ms)}`}
-                tooltip={TIP_IPPAN_TIME}
-              />
-              <DetailItem
-                label={LABEL_FINALIZED_ROUND_INDEX}
-                value={finalizedRoundIndex !== undefined ? `#${finalizedRoundIndex.toLocaleString()}` : "—"}
-                tooltip={TIP_FINALIZED_ROUND_INDEX}
-              />
-              <DetailItem
-                label="Observed round (local)"
-                value={observedRoundId !== undefined ? `#${observedRoundId.toLocaleString()}` : "—"}
-                tooltip="Round reported by this explorer’s RPC node; may be ahead of finality."
-              />
-              <DetailItem label="HashTimer seq" value={status.head.hash_timer_seq ?? "—"} />
-              <DetailItem
-                label="Validators online"
-                value={validatorsOnline !== undefined ? validatorsOnline.toLocaleString() : "—"}
-              />
+              <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
+              <DetailItem label="Validators" value={validatorCount.toString()} />
+              <DetailItem label="Metrics Available" value={status.consensus.metrics_available ? "Yes" : "No"} />
+              <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
             </div>
           ) : (
             <p className="text-sm text-slate-400">IPPAN devnet RPC unavailable. Check node or gateway.</p>
@@ -230,40 +176,91 @@ export default async function DashboardPage() {
         <Card
           title="IPNDHT"
           description="Files + handles registered against IPNDHT"
-          headerSlot={<SourceBadge source={ipndht.source} />}
+          headerSlot={<SourceBadge source={ipndht.ok ? ipndht.source : "error"} />}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <DetailItem label="Files" value={ipndht.summary.files_count.toLocaleString()} />
-            <DetailItem label="Handles" value={ipndht.summary.handles_count.toLocaleString()} />
-            <DetailItem
-              label="Providers"
-              value={ipndht.summary.providers_count !== undefined ? ipndht.summary.providers_count.toLocaleString() : "—"}
-            />
-            <DetailItem label="DHT peers" value={ipndht.summary.dht_peers_count !== undefined ? ipndht.summary.dht_peers_count.toLocaleString() : "—"} />
-          </div>
-          {!ipndht.ok && <p className="mt-3 text-sm text-slate-400">No IPNDHT data – devnet RPC unavailable.</p>}
+          {ipndht.ok ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailItem label="Files" value={ipndht.summary.files_count.toLocaleString()} />
+              <DetailItem label="Handles" value={ipndht.summary.handles_count.toLocaleString()} />
+              <DetailItem
+                label="Providers"
+                value={ipndht.summary.providers_count !== undefined ? ipndht.summary.providers_count.toLocaleString() : "—"}
+              />
+              <DetailItem label="DHT peers" value={ipndht.summary.dht_peers_count !== undefined ? ipndht.summary.dht_peers_count.toLocaleString() : "—"} />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">IPNDHT endpoint not available (404 expected on this DevNet).</p>
+          )}
         </Card>
       </div>
 
-      {status && (
-        <Suspense
-          fallback={<div className="h-32 rounded-lg border border-slate-800/70 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">Loading graphs…</div>}
+      {/* AI Status Card */}
+      {devnetOk && status?.ai && (
+        <Card
+          title="AI Status"
+          description="AI model and consensus configuration"
+          headerSlot={<SourceBadge source={statusSource} />}
         >
-          <DashboardGraphs status={status} peersCount={peers.length} />
-        </Suspense>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <DetailItem label="AI Enabled" value={status.ai.enabled ? "Yes" : "No"} />
+            <DetailItem label="Consensus Mode" value={status.ai.consensus_mode} />
+            <DetailItem label="Using Stub" value={status.ai.using_stub ? "Yes" : "No"} />
+            <DetailItem label="Model Version" value={status.ai.model_version} />
+            <DetailItem label="Shadow Loaded" value={status.ai.shadow_loaded ? "Yes" : "No"} />
+            <DetailItem
+              label="Model Hash"
+              value={
+                <span className="font-mono text-xs" title={status.ai.model_hash}>
+                  {status.ai.model_hash.slice(0, 12)}…
+                </span>
+              }
+            />
+          </div>
+        </Card>
       )}
 
-      <Card
-        title="Recent activity"
-        description="Latest blocks/rounds/validators if your /status endpoint provides them"
-        headerSlot={<SourceBadge source={statusSource} />}
-      >
-        {status ? (
-          <StatusDataTabs blocks={status.latest_blocks} rounds={status.latest_rounds} validators={status.consensus?.validators} />
-        ) : (
-          <p className="text-sm text-slate-400">IPPAN devnet RPC unavailable. No recent activity available.</p>
-        )}
-      </Card>
+      {/* Validators Table */}
+      {devnetOk && status?.consensus?.validators && (
+        <Card
+          title="Validators"
+          description="Active validators on the DevNet"
+          headerSlot={<SourceBadge source={statusSource} />}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-xs uppercase text-slate-500">
+                  <th className="pb-2 pr-4">Validator ID</th>
+                  <th className="pb-2 pr-4">Blocks Proposed</th>
+                  <th className="pb-2 pr-4">Blocks Verified</th>
+                  <th className="pb-2 pr-4">Honesty</th>
+                  <th className="pb-2 pr-4">Latency</th>
+                  <th className="pb-2 pr-4">Uptime</th>
+                  <th className="pb-2">Stake (μIPN)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(status.consensus.validators).map(([id, v]) => (
+                  <tr key={id} className="border-b border-slate-800/50">
+                    <td className="py-2 pr-4 font-mono text-xs text-emerald-100">
+                      {id.slice(0, 8)}…{id.slice(-6)}
+                      {id === status.consensus.self_id && (
+                        <span className="ml-2 rounded bg-emerald-900/50 px-1.5 py-0.5 text-[10px] text-emerald-300">self</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 text-slate-300">{v.blocks_proposed.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-slate-300">{v.blocks_verified.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-slate-300">{(v.honesty / 100).toFixed(2)}%</td>
+                    <td className="py-2 pr-4 text-slate-300">{v.latency}ms</td>
+                    <td className="py-2 pr-4 text-slate-300">{(v.uptime / 100).toFixed(2)}%</td>
+                    <td className="py-2 text-slate-300">{parseInt(v.stake.micro_ipn).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

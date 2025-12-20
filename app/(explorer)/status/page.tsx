@@ -6,7 +6,17 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { fetchAiStatusWithSource } from "@/lib/ai";
 import { fetchHealthWithSource } from "@/lib/health";
 import { fetchStatusWithSource } from "@/lib/status";
-import { LABEL_FINALIZED_ROUND_INDEX, LABEL_IPPAN_TIME } from "@/lib/terminology";
+
+function formatUptime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return `${days}d ${remainingHours}h ${minutes}m`;
+  }
+  return `${hours}h ${minutes}m`;
+}
 
 export default async function StatusPage() {
   const [healthRes, aiRes, statusRes] = await Promise.all([fetchHealthWithSource(), fetchAiStatusWithSource(), fetchStatusWithSource()]);
@@ -15,9 +25,7 @@ export default async function StatusPage() {
   const statusSource = statusRes.ok ? statusRes.source : "error";
 
   const status = statusRes.ok ? statusRes.status : undefined;
-  const observedRoundId = status?.head.round_id ?? status?.head.round_height;
-  const finalizedRoundIndex = status?.counters?.finalized_rounds;
-  const validatorsOnline = status?.live.validators_online ?? status?.live.active_operators;
+  const validatorCount = status?.consensus?.validator_ids?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -38,23 +46,22 @@ export default async function StatusPage() {
           )}
         </Card>
 
-        <Card title="Consensus snapshot" description="From /status" headerSlot={<SourceBadge source={statusSource} />}>
+        <Card title="Node Status" description="From /status" headerSlot={<SourceBadge source={statusSource} />}>
           {status ? (
             <div className="space-y-3 text-sm text-slate-200">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Finalized</span>
-                <StatusPill status={status.head.finalized ? "ok" : "warn"} />
+                <span className="text-slate-400">Network Active</span>
+                <StatusPill status={status.network_active ? "ok" : "warn"} />
               </div>
-              <KeyValue label={LABEL_IPPAN_TIME} value={status.head.ippan_time_ms !== undefined ? status.head.ippan_time_ms.toLocaleString() : "—"} />
-              <KeyValue
-                label={LABEL_FINALIZED_ROUND_INDEX}
-                value={finalizedRoundIndex !== undefined ? `#${finalizedRoundIndex.toLocaleString()}` : "—"}
-              />
-              <KeyValue label="Observed round (local)" value={observedRoundId !== undefined ? `#${observedRoundId.toLocaleString()}` : "—"} />
-              <KeyValue label="DAG blocks observed (local)" value={`#${status.head.block_height.toLocaleString()}`} />
-              <KeyValue label="Validators online" value={validatorsOnline !== undefined ? validatorsOnline.toLocaleString() : "—"} />
+              <KeyValue label="Node ID" value={status.node_id} />
+              <KeyValue label="Version" value={status.version} />
+              <KeyValue label="Uptime" value={formatUptime(status.uptime_seconds)} />
+              <KeyValue label="Peer Count" value={status.peer_count.toString()} />
+              <KeyValue label="Mempool Size" value={status.mempool_size.toString()} />
+              <KeyValue label="Consensus Round" value={`#${status.consensus.round}`} />
+              <KeyValue label="Validators" value={validatorCount.toString()} />
               <p className="text-xs text-slate-500">
-                Local counters reflect this explorer’s RPC node view; IPPAN finality is tracked by rounds (not a global block height).
+                Status reflects this explorer&apos;s connected RPC node view.
               </p>
             </div>
           ) : (
@@ -62,8 +69,24 @@ export default async function StatusPage() {
           )}
         </Card>
 
-        <Card title="AI status" description="From /ai/status" headerSlot={<SourceBadge source={aiSource} />}>
-          {!aiRes.ok ? (
+        <Card title="AI status" description="From /status AI section" headerSlot={<SourceBadge source={statusSource} />}>
+          {status?.ai ? (
+            <div className="space-y-2">
+              <StatusPill status={status.ai.using_stub ? "warn" : "ok"} />
+              <KeyValue label="AI Enabled" value={status.ai.enabled ? "Yes" : "No"} />
+              <KeyValue label="Consensus Mode" value={status.ai.consensus_mode} />
+              <KeyValue label="Using Stub" value={status.ai.using_stub ? "Yes" : "No"} />
+              <KeyValue label="Model Version" value={status.ai.model_version} />
+              <p className="text-sm text-slate-400 mt-2">Model hash</p>
+              <p className="font-mono text-xs text-slate-50 break-all">{status.ai.model_hash}</p>
+              {status.ai.shadow_loaded && (
+                <>
+                  <p className="text-sm text-slate-400 mt-2">Shadow model hash</p>
+                  <p className="font-mono text-xs text-slate-50 break-all">{status.ai.shadow_model_hash}</p>
+                </>
+              )}
+            </div>
+          ) : !aiRes.ok ? (
             <p className="text-sm text-slate-400">{aiRes.error}</p>
           ) : aiRes.aiAvailable && aiRes.ai ? (
             <div className="space-y-2">
