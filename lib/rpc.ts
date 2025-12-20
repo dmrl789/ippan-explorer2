@@ -46,6 +46,31 @@ export function getEnvRpcBaseUrl(): string | undefined {
   return getRpcBaseFromEnv();
 }
 
+/**
+ * DevNet node list for the status panel.
+ * Reads from NEXT_PUBLIC_IPPAN_DEVNET_NODES (comma-separated).
+ * Falls back to all four known DevNet nodes if not configured.
+ */
+function getDevnetNodes(): string[] {
+  const rawDevnet =
+    process.env.NEXT_PUBLIC_IPPAN_DEVNET_NODES ??
+    "http://188.245.97.41:8080," +
+    "http://135.181.145.174:8080," +
+    "http://5.223.51.238:8080," +
+    "http://178.156.219.107:8080";
+
+  return rawDevnet
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * List of all DevNet nodes to check in the status panel.
+ * This is always a non-empty array.
+ */
+export const DEVNET_NODES: string[] = getDevnetNodes();
+
 const RPC_BASE_URL = IPPAN_RPC_BASE;
 
 export class RpcError extends Error {

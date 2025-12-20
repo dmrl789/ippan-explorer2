@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { IPPAN_RPC_BASE } from "@/lib/rpc";
+import { IPPAN_RPC_BASE, DEVNET_NODES as DEVNET_NODE_URLS } from "@/lib/rpc";
 import type { StatusResponseV1 } from "@/types/rpc";
 import { StatusPill } from "@/components/ui/StatusPill";
 
@@ -13,7 +13,7 @@ type NodeStatus = {
   lastHashTimer?: string;
 };
 
-const DEVNET_NODES: { name: string; url: string }[] = [
+const KNOWN_NODE_NAMES: { name: string; url: string }[] = [
   { name: "Node 1 (Nuremberg)", url: "http://188.245.97.41:8080" },
   { name: "Node 2 (Helsinki)", url: "http://135.181.145.174:8080" },
   { name: "Node 3 (Singapore)", url: "http://5.223.51.238:8080" },
@@ -25,19 +25,10 @@ function normalizeBase(url: string): string {
 }
 
 function getConfiguredDevnetNodes(): { name: string; url: string }[] {
-  const raw = process.env.NEXT_PUBLIC_IPPAN_DEVNET_NODES;
-  if (!raw) return DEVNET_NODES;
-
-  const urls = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(normalizeBase);
-
-  if (!urls.length) return DEVNET_NODES;
+  const urls = DEVNET_NODE_URLS.map(normalizeBase);
 
   return urls.map((url, idx) => {
-    const known = DEVNET_NODES.find((n) => normalizeBase(n.url) === url);
+    const known = KNOWN_NODE_NAMES.find((n) => normalizeBase(n.url) === url);
     return {
       name: known?.name ?? `Node ${idx + 1}`,
       url,

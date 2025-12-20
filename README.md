@@ -31,7 +31,41 @@ The explorer requires a reachable IPPAN DevNet RPC endpoint.
 Set `NEXT_PUBLIC_IPPAN_DEVNET_NODES` to a comma-separated list to power the DevNet status panel:
 
 ```bash
-NEXT_PUBLIC_IPPAN_DEVNET_NODES="http://188.245.97.41:8080,http://135.181.145.174:8080,http://178.156.219.107:8080,http://5.223.51.238:8080"
+NEXT_PUBLIC_IPPAN_DEVNET_NODES="http://188.245.97.41:8080,http://135.181.145.174:8080,http://5.223.51.238:8080,http://178.156.219.107:8080"
+```
+
+If not set, the explorer defaults to checking all four known DevNet nodes:
+- `http://188.245.97.41:8080` (Nuremberg)
+- `http://135.181.145.174:8080` (Helsinki)
+- `http://5.223.51.238:8080` (Singapore)
+- `http://178.156.219.107:8080` (Ashburn, USA)
+
+### Environment variable resolution order
+
+The explorer checks environment variables in this order:
+
+1. `NEXT_PUBLIC_IPPAN_RPC_BASE` (preferred)
+2. `NEXT_PUBLIC_NODE_RPC`
+3. `NEXT_PUBLIC_IPPAN_RPC_URL`
+4. `NEXT_PUBLIC_IPPAN_RPC`
+5. `NEXT_PUBLIC_IPPAN_RPC_FALLBACK`
+6. `NEXT_PUBLIC_RPC_URL`
+7. `NEXT_PUBLIC_EXPLORER_API`
+8. `VITE_NODE_RPC`
+9. `IPPAN_RPC_URL`
+10. `IPPAN_RPC_BASE`
+11. Falls back to: `http://188.245.97.41:8080`
+
+### Example configuration
+
+For Vercel or local `.env` file:
+
+```bash
+# Primary RPC endpoint (required, or falls back to Nuremberg node)
+NEXT_PUBLIC_IPPAN_RPC_BASE=http://188.245.97.41:8080
+
+# DevNet status panel node list (optional, defaults to all 4 nodes)
+NEXT_PUBLIC_IPPAN_DEVNET_NODES=http://188.245.97.41:8080,http://135.181.145.174:8080,http://5.223.51.238:8080,http://178.156.219.107:8080
 ```
 
 ## Pages
