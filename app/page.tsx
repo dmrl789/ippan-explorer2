@@ -58,7 +58,7 @@ export default async function DashboardPage() {
         Connected to IPPAN DevNet via <code className="rounded bg-slate-900/60 px-1 py-0.5 text-slate-300">{rpcBase}</code>
       </div>
 
-      <Card title="DevNet status" description="Quick check against the 4 known DevNet nodes">
+      <Card title="DevNet status" description="Live status from single canonical RPC gateway">
         <DevnetStatus />
       </Card>
 
@@ -89,7 +89,12 @@ export default async function DashboardPage() {
             </div>
           </>
         ) : (
-          <p className="text-sm text-slate-400">IPPAN devnet RPC unavailable. Check node or gateway.</p>
+          <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
+            <p className="text-sm text-amber-200/80">Gateway RPC unavailable</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Unable to reach the canonical DevNet RPC gateway. This may indicate a network issue or the gateway is temporarily down.
+            </p>
+          </div>
         )}
       </Card>
 
@@ -154,7 +159,10 @@ export default async function DashboardPage() {
               <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
             </div>
           ) : (
-            <p className="text-sm text-slate-400">IPPAN devnet RPC unavailable. Check node or gateway.</p>
+            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">Validator data unavailable</p>
+              <p className="mt-1 text-xs text-slate-500">Gateway RPC is unreachable.</p>
+            </div>
           )}
         </Card>
 
@@ -170,7 +178,14 @@ export default async function DashboardPage() {
               value={peers.some((peer) => typeof peer.last_seen_ms === "number") ? "Available" : "—"}
             />
           </div>
-          {!peersRes.ok && <p className="mt-3 text-sm text-slate-400">No peer data – devnet RPC unavailable.</p>}
+          {!peersRes.ok && (
+            <div className="mt-3 rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">Peer inventory unavailable from gateway</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {peersRes.error?.includes("unavailable") ? "Gateway RPC is unreachable." : peersRes.error ?? "Unknown error"}
+              </p>
+            </div>
+          )}
         </Card>
 
         <Card

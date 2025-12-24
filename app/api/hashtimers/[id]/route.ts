@@ -38,7 +38,7 @@ export async function GET(_request: Request, { params }: Params) {
     const data = await rpcFetch<HashTimerDetail>(`/hashtimers/${encodeURIComponent(id)}`);
     return NextResponse.json({ ok: true, source: "live", data: normalizeIppanTime(data) }, { status: 200 });
   } catch (err) {
-    console.error("[/api/hashtimers/:id] RPC error", err);
-    return NextResponse.json({ ok: false, source: "error", error: "IPPAN devnet RPC unavailable" }, { status: 502 });
+    console.error("[/api/hashtimers/:id] gateway error", err);
+    return NextResponse.json({ ok: false, source: "error", error: "Gateway RPC unavailable (connection failed)" }, { status: 502 });
   }
 }

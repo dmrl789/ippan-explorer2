@@ -61,8 +61,8 @@ export async function fetchRecentBlocks(): Promise<
     return {
       ok: false,
       source: "error",
-      error: "IPPAN devnet RPC unavailable",
-      errorCode: "rpc_unavailable",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable",
       blocks: []
     };
   }
@@ -84,7 +84,7 @@ export async function fetchBlockDetail(
     return { ok: true, source: "live", block: null };
   }
   if (!data) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+    return { ok: false, source: "error", error: "Gateway RPC unavailable (connection failed)" };
   }
 
   return { ok: true, source: "live", block: normalizeBlockDetail(data, id) };

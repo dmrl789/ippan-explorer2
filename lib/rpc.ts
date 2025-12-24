@@ -47,22 +47,15 @@ export function getEnvRpcBaseUrl(): string | undefined {
 }
 
 /**
- * Default canonical DevNet nodes (Nuremberg, Helsinki, Singapore, Ashburn).
+ * DevNet architecture note:
+ * The Explorer connects to a SINGLE canonical RPC gateway (IPPAN_RPC_BASE).
+ * The gateway aggregates data from all validators internally.
+ * Direct validator probing is NOT supported from the frontend - validators
+ * are not public RPC endpoints and are only reachable within the DevNet peer graph.
+ *
+ * Topology:
+ *   Explorer (Vercel) → Single RPC Gateway (188.245.97.41:8080) → Internal DevNet
  */
-const DEFAULT_DEVNET_NODES =
-  "http://188.245.97.41:8080," +
-  "http://135.181.145.174:8080," +
-  "http://5.223.51.238:8080," +
-  "http://178.156.219.107:8080";
-
-const RAW_DEVNET = process.env.NEXT_PUBLIC_IPPAN_DEVNET_NODES ?? DEFAULT_DEVNET_NODES;
-
-/**
- * List of DevNet node URLs for multi-node status checks.
- */
-export const DEVNET_NODES: string[] = RAW_DEVNET.split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
 
 const RPC_BASE_URL = IPPAN_RPC_BASE;
 

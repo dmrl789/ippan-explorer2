@@ -40,11 +40,13 @@ export default async function IpndhtPage() {
           <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
             <p className="text-sm text-amber-200/80">
               {"errorCode" in data && data.errorCode === "endpoint_not_available"
-                ? "IPNDHT endpoint not implemented yet on this DevNet (404 expected)."
-                : data.error ?? "IPPAN devnet RPC unavailable."}
+                ? "DevNet feature — IPNDHT endpoint not yet exposed"
+                : data.error ?? "Gateway RPC unavailable."}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              The DevNet node is online (check /status), but the /ipndht endpoint may not be implemented yet.
+              {"errorCode" in data && data.errorCode === "endpoint_not_available"
+                ? "This is expected during early DevNet phases. The gateway is online — IPNDHT will be available once the endpoint is implemented."
+                : "Unable to reach the canonical RPC gateway. Check network connectivity."}
             </p>
           </div>
         )}

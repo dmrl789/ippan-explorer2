@@ -53,8 +53,8 @@ export async function fetchIpndhtFiles(): Promise<
     return {
       ok: false,
       source: "error",
-      error: "IPPAN devnet RPC unavailable",
-      errorCode: "rpc_unavailable",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable",
       files: []
     };
   }
@@ -75,7 +75,7 @@ export async function fetchIpndhtFileDescriptor(
     return { ok: true, source: "live", file: null };
   }
   if (!data) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+    return { ok: false, source: "error", error: "Gateway RPC unavailable (connection failed)" };
   }
   return { ok: true, source: "live", file: normalizeFile(data, id) };
 }

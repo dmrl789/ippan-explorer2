@@ -1,152 +1,183 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { IPPAN_RPC_BASE } from "@/lib/rpc";
-import type { StatusResponseV1 } from "@/types/rpc";
 import { StatusPill } from "@/components/ui/StatusPill";
 
-type NodeStatus = {
-  name: string;
-  url: string;
+/**
+ * DevNet status derived from the single canonical RPC gateway.
+ * The Explorer does NOT probe individual validator nodes directly.
+ * All validator/network data comes from /status on the gateway.
+ */
+interface GatewayStatus {
   ok: boolean;
-  lastRound?: number;
-  lastHashTimer?: string;
-};
-
-const DEVNET_NODES: { name: string; url: string }[] = [
-  { name: "Node 1 (Nuremberg)", url: "http://188.245.97.41:8080" },
-  { name: "Node 2 (Helsinki)", url: "http://135.181.145.174:8080" },
-  { name: "Node 3 (Singapore)", url: "http://5.223.51.238:8080" },
-  { name: "Node 4 (Ashburn, USA)", url: "http://178.156.219.107:8080" },
-];
+  loading: boolean;
+  error?: string;
+  nodeId?: string;
+  version?: string;
+  networkActive?: boolean;
+  peerCount?: number;
+  consensusRound?: number;
+  validatorCount?: number;
+  uptimeSeconds?: number;
+  mempoolSize?: number;
+}
 
 function normalizeBase(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-function getConfiguredDevnetNodes(): { name: string; url: string }[] {
-  const raw = process.env.NEXT_PUBLIC_IPPAN_DEVNET_NODES;
-  if (!raw) return DEVNET_NODES;
-
-  const urls = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(normalizeBase);
-
-  if (!urls.length) return DEVNET_NODES;
-
-  return urls.map((url, idx) => {
-    const known = DEVNET_NODES.find((n) => normalizeBase(n.url) === url);
-    return {
-      name: known?.name ?? `Node ${idx + 1}`,
-      url,
-    };
-  });
-}
-
-async function fetchNodeStatus(url: string): Promise<Pick<NodeStatus, "lastRound" | "lastHashTimer"> | null> {
+async function fetchGatewayStatus(): Promise<GatewayStatus> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4000);
+  const timeout = setTimeout(() => controller.abort(), 7000);
 
   try {
-    const res = await fetch(`${normalizeBase(url)}/status`, { cache: "no-store", signal: controller.signal });
-    if (!res.ok) return null;
-    const json = (await res.json()) as Partial<StatusResponseV1> & Record<string, unknown>;
+    const base = normalizeBase(IPPAN_RPC_BASE);
+    const res = await fetch(`${base}/status`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
 
-    const head = (json as any)?.head;
-    const lastRoundRaw = head?.round_id ?? head?.round_height ?? (json as any)?.round_height ?? (json as any)?.round;
-    const lastRound = typeof lastRoundRaw === "number" ? lastRoundRaw : undefined;
+    if (!res.ok) {
+      return {
+        ok: false,
+        loading: false,
+        error: `Gateway RPC error: ${res.status} ${res.statusText}`,
+      };
+    }
 
-    const lastHashTimerRaw = head?.hash_timer_id ?? (json as any)?.hash_timer_id;
-    const lastHashTimer = typeof lastHashTimerRaw === "string" ? lastHashTimerRaw : undefined;
+    const json = await res.json();
 
-    return { lastRound, lastHashTimer };
-  } catch {
-    return null;
+    // Validate we got a proper status response
+    if (!json || typeof json !== "object") {
+      return {
+        ok: false,
+        loading: false,
+        error: "Invalid response from gateway",
+      };
+    }
+
+    // Extract data from the DevNet status schema (status_schema_version: 2)
+    const validatorIds = json.consensus?.validator_ids ?? [];
+
+    return {
+      ok: true,
+      loading: false,
+      nodeId: json.node_id,
+      version: json.version,
+      networkActive: json.network_active === true,
+      peerCount: typeof json.peer_count === "number" ? json.peer_count : undefined,
+      consensusRound: typeof json.consensus?.round === "number" ? json.consensus.round : undefined,
+      validatorCount: validatorIds.length,
+      uptimeSeconds: typeof json.uptime_seconds === "number" ? json.uptime_seconds : undefined,
+      mempoolSize: typeof json.mempool_size === "number" ? json.mempool_size : undefined,
+    };
+  } catch (err) {
+    // Distinguish between timeout/abort and other errors
+    const isAbort = err instanceof Error && err.name === "AbortError";
+    return {
+      ok: false,
+      loading: false,
+      error: isAbort
+        ? "Gateway RPC timeout (node may be unreachable)"
+        : "Gateway RPC unavailable (connection failed)",
+    };
   } finally {
     clearTimeout(timeout);
   }
 }
 
+function formatUptime(seconds?: number): string {
+  if (seconds === undefined) return "—";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    return `${days}d ${remainingHours}h`;
+  }
+  return `${hours}h ${minutes}m`;
+}
+
 export function DevnetStatus() {
-  const nodeList = useMemo(() => getConfiguredDevnetNodes(), []);
-  const [nodes, setNodes] = useState<NodeStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<GatewayStatus>({ ok: false, loading: true });
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
-      setLoading(true);
-      const results = await Promise.all(
-        nodeList.map(async (n) => {
-          const info = await fetchNodeStatus(n.url);
-          return {
-            name: n.name,
-            url: n.url,
-            ok: info !== null,
-            lastRound: info?.lastRound,
-            lastHashTimer: info?.lastHashTimer,
-          } satisfies NodeStatus;
-        }),
-      );
-
+      const result = await fetchGatewayStatus();
       if (!cancelled) {
-        setNodes(results);
-        setLoading(false);
+        setStatus(result);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [nodeList]);
+  }, []);
 
   const configuredBase = normalizeBase(IPPAN_RPC_BASE);
-  const baseIsInNodeList = nodeList.some((n) => normalizeBase(n.url) === configuredBase);
 
   return (
-    <div className="space-y-2 text-xs">
+    <div className="space-y-3 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <div className="font-semibold text-slate-100">IPPAN DevNet</div>
-        <StatusPill status={nodes.some((n) => n.ok) ? "ok" : "error"} />
+        <StatusPill status={status.ok ? "ok" : status.loading ? "warn" : "error"} />
       </div>
 
       <div className="text-slate-400">
-        4 validator nodes + tx bot at <code className="rounded bg-slate-900/60 px-1 py-0.5 text-slate-200">88.198.26.37</code>
+        Single RPC gateway: connects to 4 validators + tx bot internally
       </div>
 
       <div className="text-slate-400">
-        Explorer RPC base:{" "}
-        <code className="break-all rounded bg-slate-900/60 px-1 py-0.5 text-slate-200">{configuredBase}</code>{" "}
-        {!baseIsInNodeList && <span className="text-amber-300">(not in configured node list)</span>}
+        Explorer RPC:{" "}
+        <code className="break-all rounded bg-slate-900/60 px-1 py-0.5 text-slate-200">{configuredBase}</code>
       </div>
 
-      {loading ? (
-        <div className="text-slate-400">Checking nodes…</div>
+      {status.loading ? (
+        <div className="text-slate-400">Checking gateway…</div>
+      ) : status.ok ? (
+        <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-300 font-medium">Gateway Online</span>
+            <StatusPill status="ok" />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <StatItem label="Node ID" value={status.nodeId ? `${status.nodeId.slice(0, 12)}…` : "—"} />
+            <StatItem label="Version" value={status.version ?? "—"} />
+            <StatItem label="Network" value={status.networkActive ? "Active" : "Inactive"} />
+            <StatItem label="Peers" value={status.peerCount?.toString() ?? "—"} />
+            <StatItem label="Validators" value={status.validatorCount?.toString() ?? "—"} />
+            <StatItem label="Round" value={status.consensusRound !== undefined ? `#${status.consensusRound}` : "—"} />
+            <StatItem label="Uptime" value={formatUptime(status.uptimeSeconds)} />
+            <StatItem label="Mempool" value={status.mempoolSize?.toString() ?? "—"} />
+          </div>
+          <p className="text-[10px] text-slate-500 mt-2">
+            Data from single canonical RPC gateway. Validator details available on Status page.
+          </p>
+        </div>
       ) : (
-        <ul className="space-y-1">
-          {nodes.map((n) => (
-            <li key={n.url} className="flex flex-col gap-0.5 rounded-lg border border-slate-800/70 bg-slate-950/40 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-medium text-slate-200">
-                  {n.name}{" "}
-                  <span className="text-[10px] font-normal text-slate-500">
-                    ({normalizeBase(n.url).replace("http://", "")})
-                  </span>
-                </div>
-                <div className={n.ok ? "text-emerald-300" : "text-slate-400"}>{n.ok ? "OK" : "offline / no status"}</div>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
-                <span>round: {n.lastRound ?? "—"}</span>
-                <span className="break-all">hashTimer: {n.lastHashTimer ?? "—"}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-red-300 font-medium">Gateway Offline</span>
+            <StatusPill status="error" />
+          </div>
+          <p className="text-slate-400">{status.error ?? "RPC gateway unavailable"}</p>
+          <p className="text-[10px] text-slate-500 mt-2">
+            The Explorer requires the canonical RPC gateway to be reachable. Check network connectivity.
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
+function StatItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 rounded bg-slate-900/40 px-2 py-1">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-slate-200 font-medium">{value}</span>
+    </div>
+  );
+}

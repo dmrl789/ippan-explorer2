@@ -33,7 +33,7 @@ export async function fetchAccountSummary(
     return { ok: true, source: "live", account: null };
   }
   if (!data) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+    return { ok: false, source: "error", error: "Gateway RPC unavailable (connection failed)" };
   }
   return { ok: true, source: "live", account: normalizeAccount(data, address) };
 }

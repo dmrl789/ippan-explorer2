@@ -38,12 +38,12 @@ export async function fetchTransactionDetail(
   }
   
   if (!data) {
-    const errorCode = status === null ? "rpc_unavailable" : "unknown_error";
+    const errorCode = status === null ? "gateway_unreachable" : "unknown_error";
     return {
       ok: false,
       source: "error",
       error: status === null
-        ? "IPPAN devnet RPC unavailable"
+        ? "Gateway RPC unavailable (connection failed)"
         : `Unexpected error fetching transaction (HTTP ${status})`,
       errorCode
     };
