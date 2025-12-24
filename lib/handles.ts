@@ -37,7 +37,7 @@ export async function fetchHandleRecord(
   for (const path of candidates) {
     const { status, data } = await safeJsonFetchWithStatus<any>(path);
     if (status === 404) continue;
-    if (!data) return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+    if (!data) return { ok: false, source: "error", error: "Gateway RPC unavailable (connection failed)" };
 
     if (data && typeof data === "object") {
       const record =

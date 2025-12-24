@@ -19,7 +19,13 @@ export async function fetchAiStatusWithSource(): Promise<
   }
 
   if (!data) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable", ai: null, aiAvailable: false };
+    return {
+      ok: false,
+      source: "error",
+      error: "Gateway RPC unavailable (connection failed)",
+      ai: null,
+      aiAvailable: false,
+    };
   }
 
   return { ok: true, source: "live", ai: data, aiAvailable: true };

@@ -24,7 +24,7 @@ export default async function HandlesPage({ searchParams }: HandlesPageProps) {
       {handleQuery && (
         <Card title={`Lookup result for ${handleQuery}`} headerSlot={<SourceBadge source={result?.ok ? result.source : "error"} />}>
           {!result?.ok ? (
-            <p className="text-sm text-slate-400">{result?.error ?? "IPPAN devnet RPC unavailable."}</p>
+            <p className="text-sm text-slate-400">{result?.error ?? "Gateway RPC unavailable."}</p>
           ) : result.record ? (
             <div className="space-y-2 text-sm text-slate-300">
               <p>

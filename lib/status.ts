@@ -52,11 +52,29 @@ export interface DevNetNodeStatus {
 
 export async function fetchStatusWithSource(): Promise<
   | { ok: true; source: "live"; status: DevNetNodeStatus }
-  | { ok: false; source: "error"; error: string }
+  | { ok: false; source: "error"; error: string; errorCode?: string }
 > {
   const status = await safeJsonFetch<DevNetNodeStatus>("/status");
-  if (!status || !status.node_id) {
-    return { ok: false, source: "error", error: "IPPAN devnet RPC unavailable" };
+
+  // No response means gateway is unreachable (this is a real error)
+  if (!status) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable",
+    };
   }
+
+  // Response but missing node_id means invalid/incomplete response
+  if (!status.node_id) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Invalid status response from gateway",
+      errorCode: "invalid_response",
+    };
+  }
+
   return { ok: true, source: "live", status };
 }

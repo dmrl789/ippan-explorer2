@@ -46,12 +46,12 @@ export async function GET() {
       { status: 200 },
     );
   } catch (err: any) {
-    console.error("[api/status] devnet error", err);
+    console.error("[api/status] gateway error", err);
     return NextResponse.json(
       {
         ok: false,
         source: "live",
-        error: "IPPAN devnet RPC unavailable",
+        error: "Gateway RPC unavailable (connection failed)",
         rpc_base: IPPAN_RPC_BASE,
         error_details: err?.message ?? String(err),
       },

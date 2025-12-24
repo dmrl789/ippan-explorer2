@@ -58,7 +58,18 @@ export default async function L2Page() {
             <Detail label="Network Active" value={status.network_active ? "Yes" : "No"} />
           </div>
         ) : (
-          <p className="text-sm text-slate-400">{statusRes.ok ? "Status unavailable." : statusRes.error}</p>
+          <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+            <p className="text-sm text-slate-400">
+              {statusRes.ok ? "Status unavailable." : "L1 context unavailable — gateway error"}
+            </p>
+            {!statusRes.ok && (
+              <p className="mt-1 text-xs text-slate-500">
+                {"errorCode" in statusRes && statusRes.errorCode === "gateway_unreachable"
+                  ? "Unable to reach the canonical RPC gateway."
+                  : statusRes.error}
+              </p>
+            )}
+          </div>
         )}
       </Card>
 
@@ -73,11 +84,13 @@ export default async function L2Page() {
           <div className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
             <p className="text-sm text-amber-200/80">
               {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
-                ? "IPNDHT endpoint not implemented yet on this DevNet (404 expected)."
-                : ipndht.error ?? "IPPAN devnet RPC unavailable."}
+                ? "DevNet feature — IPNDHT endpoint not yet exposed"
+                : ipndht.error ?? "Gateway RPC unavailable."}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              The DevNet node is online. IPNDHT features will be available once the endpoint is implemented.
+              {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
+                ? "This is expected during early DevNet phases. L2 modules will have full IPNDHT context once the endpoint is implemented."
+                : "Unable to reach the canonical RPC gateway. Check network connectivity."}
             </p>
           </div>
         )}

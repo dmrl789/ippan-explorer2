@@ -35,8 +35,8 @@ export default async function HashTimerDetailPage({ params }: HashTimerPageProps
             </Link>
           }
         />
-        <Card title="Devnet RPC unavailable" headerSlot={<SourceBadge source="error" />}>
-          <p className="text-sm text-slate-400">{json?.error ?? "IPPAN devnet RPC unavailable"}</p>
+        <Card title="Gateway RPC unavailable" headerSlot={<SourceBadge source="error" />}>
+          <p className="text-sm text-slate-400">{json?.error ?? "Gateway RPC unavailable (connection failed)"}</p>
         </Card>
       </div>
     );

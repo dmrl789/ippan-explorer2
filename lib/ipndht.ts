@@ -79,8 +79,8 @@ export async function fetchIpndht(): Promise<
     return {
       ok: false,
       source: "error",
-      error: "IPPAN devnet RPC unavailable",
-      errorCode: "rpc_unavailable",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable",
       sections: { handles: "error", files: "error", providers: "error", peers: "error" },
       summary: { handles_count: 0, files_count: 0, peers_count: 0 },
       latest_handles: [],

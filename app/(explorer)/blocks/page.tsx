@@ -13,9 +13,9 @@ export default async function BlocksPage() {
   const getEmptyMessage = () => {
     if (!result.ok) {
       if ("errorCode" in result && result.errorCode === "endpoint_not_available") {
-        return "Block list endpoint not available on this DevNet yet. The node is online but does not expose /blocks.";
+        return "Block list endpoint not available on this DevNet yet. The gateway is online but does not expose /blocks.";
       }
-      return result.error ?? "IPPAN devnet RPC unavailable.";
+      return result.error ?? "Gateway RPC unavailable.";
     }
     return "No blocks available yet from this DevNet.";
   };
@@ -27,10 +27,14 @@ export default async function BlocksPage() {
         {!result.ok && (
           <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
             <p className="text-sm text-amber-200/80">
-              {result.error ?? "IPPAN devnet RPC unavailable."}
+              {"errorCode" in result && result.errorCode === "endpoint_not_available"
+                ? "DevNet feature — Blocks endpoint not yet exposed"
+                : result.error ?? "Gateway RPC unavailable."}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              The DevNet node is online (check /status), but the /blocks endpoint may not be implemented yet.
+              {"errorCode" in result && result.errorCode === "endpoint_not_available"
+                ? "This is expected during early DevNet phases. The gateway is online — /blocks will be available once implemented."
+                : "Unable to reach the canonical RPC gateway. Check network connectivity."}
             </p>
           </div>
         )}

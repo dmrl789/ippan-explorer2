@@ -37,7 +37,16 @@ export default async function NetworkPage() {
       >
         {!peerData.ok && (
           <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
-            <p className="text-sm text-amber-200/80">{peerData.error ?? "IPPAN devnet RPC unavailable."}</p>
+            <p className="text-sm text-amber-200/80">
+              {"errorCode" in peerData && peerData.errorCode === "endpoint_not_available"
+                ? "Peer inventory unavailable from gateway"
+                : peerData.error ?? "Gateway RPC unavailable."}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {"errorCode" in peerData && peerData.errorCode === "endpoint_not_available"
+                ? "The /peers endpoint may not be exposed on this DevNet yet."
+                : "Check gateway connectivity."}
+            </p>
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -81,11 +90,18 @@ export default async function NetworkPage() {
           ]}
         />
         {!ipndht.ok && (
-          <p className="mt-3 text-sm text-slate-400">
-            {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
-              ? "IPNDHT context not available (endpoint not implemented on this DevNet)."
-              : "No IPNDHT context – devnet RPC unavailable."}
-          </p>
+          <div className="mt-3 rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+            <p className="text-sm text-slate-400">
+              {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
+                ? "IPNDHT context unavailable — DevNet feature not yet exposed"
+                : "IPNDHT context unavailable — gateway error"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {"errorCode" in ipndht && ipndht.errorCode === "endpoint_not_available"
+                ? "This is expected during early DevNet phases. The node is online."
+                : "Check gateway connectivity."}
+            </p>
+          </div>
         )}
       </Card>
     </div>

@@ -42,7 +42,18 @@ export default async function StatusPage() {
               <HealthRow label="DHT handles" ok={healthRes.health.dhtHandle.healthy} detail={`mode: ${healthRes.health.dhtHandle.mode}`} />
             </div>
           ) : (
-            <p className="text-sm text-slate-400">{healthRes.ok ? "Health unavailable." : healthRes.error}</p>
+            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">
+                {"errorCode" in healthRes && healthRes.errorCode === "endpoint_not_available"
+                  ? "DevNet feature — Health endpoint not yet exposed"
+                  : healthRes.ok
+                    ? "Health unavailable."
+                    : "Health data unavailable — gateway error"}
+              </p>
+              {!healthRes.ok && "errorCode" in healthRes && healthRes.errorCode !== "endpoint_not_available" && (
+                <p className="mt-1 text-xs text-slate-500">{healthRes.error}</p>
+              )}
+            </div>
           )}
         </Card>
 
@@ -65,7 +76,18 @@ export default async function StatusPage() {
               </p>
             </div>
           ) : (
-            <p className="text-sm text-slate-400">{statusRes.ok ? "Status unavailable." : statusRes.error}</p>
+            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">
+                {statusRes.ok ? "Status unavailable." : "Node status unavailable — gateway error"}
+              </p>
+              {!statusRes.ok && (
+                <p className="mt-1 text-xs text-slate-500">
+                  {"errorCode" in statusRes && statusRes.errorCode === "gateway_unreachable"
+                    ? "Unable to reach the canonical RPC gateway."
+                    : statusRes.error}
+                </p>
+              )}
+            </div>
           )}
         </Card>
 

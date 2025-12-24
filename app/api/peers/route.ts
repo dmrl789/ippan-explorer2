@@ -9,7 +9,7 @@ export async function GET() {
         {
           ok: false,
           source: "error",
-          error: "IPPAN devnet RPC unavailable",
+          error: "Gateway RPC unavailable (connection failed)",
           rpc_base: IPPAN_RPC_BASE,
           error_details: "safeJsonFetch returned null for /peers",
         },
@@ -18,12 +18,12 @@ export async function GET() {
     }
     return NextResponse.json({ ok: true, source: "live", data, rpc_base: IPPAN_RPC_BASE }, { status: 200 });
   } catch (err: any) {
-    console.error("[api/peers] devnet error", err);
+    console.error("[api/peers] gateway error", err);
     return NextResponse.json(
       {
         ok: false,
         source: "error",
-        error: "IPPAN devnet RPC unavailable",
+        error: "Gateway RPC unavailable (connection failed)",
         rpc_base: IPPAN_RPC_BASE,
         error_details: err?.message ?? String(err),
       },
