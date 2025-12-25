@@ -2,12 +2,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import JsonViewer from "@/components/common/JsonViewer";
 import { SourceBadge } from "@/components/common/SourceBadge";
+import { RpcErrorBanner } from "@/components/common/RpcErrorBanner";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { fetchTransactionDetail } from "@/lib/tx";
 import { formatAmount, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
+import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
 interface TransactionPageProps {
   params: { hash: string };
@@ -26,12 +28,16 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
           actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back</Link>} 
         />
         <Card title="DevNet RPC Error" headerSlot={<SourceBadge source="error" />}>
-          <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4">
-            <p className="text-sm text-red-200/80">{result.error}</p>
-            <p className="mt-2 text-xs text-slate-500">
-              The DevNet node may be temporarily unavailable. Try again in a moment.
-            </p>
-          </div>
+          <RpcErrorBanner
+            error={{
+              error: result.error,
+              errorCode: "errorCode" in result ? result.errorCode : undefined,
+              rpcBase: IPPAN_RPC_BASE,
+              path: `/tx/${params.hash}`,
+            }}
+            context="Transaction"
+            showDebugLink={true}
+          />
         </Card>
       </div>
     );

@@ -84,7 +84,11 @@ export default async function DashboardPage() {
             <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-4">
               <DetailItem label="Uptime" value={formatUptime(status.uptime_seconds)} />
               <DetailItem label="Peer Count" value={status.peer_count.toString()} />
-              <DetailItem label="Mempool Size" value={status.mempool_size.toString()} />
+              <DetailItem 
+                label="Mempool Size" 
+                value={status.mempool_size.toString()} 
+                tooltip="Mempool=0 means no pending transactions at this node right now. If blocks/tx are failing to load, this number may still be real, but the Explorer cannot prove tx flow until block/tx endpoints respond."
+              />
               <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
             </div>
           </>

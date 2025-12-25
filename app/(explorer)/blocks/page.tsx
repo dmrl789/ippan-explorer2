@@ -3,39 +3,43 @@ import SimpleTable from "@/components/tables/SimpleTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
+import { RpcErrorBanner } from "@/components/common/RpcErrorBanner";
 import { fetchRecentBlocks } from "@/lib/blocks";
 import { formatTimestamp, shortenHash } from "@/lib/format";
+import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
 export default async function BlocksPage() {
   const result = await fetchRecentBlocks();
-  
-  // Determine the appropriate message based on error type
-  const getEmptyMessage = () => {
-    if (!result.ok) {
-      if ("errorCode" in result && result.errorCode === "endpoint_not_available") {
-        return "Block list endpoint not available on this DevNet yet. The gateway is online but does not expose /blocks.";
-      }
-      return result.error ?? "Gateway RPC unavailable.";
-    }
-    return "No blocks available yet from this DevNet.";
-  };
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Blocks" description="Latest blocks from devnet /blocks" />
+      <PageHeader 
+        title="Blocks" 
+        description="Latest blocks from devnet /blocks"
+        actions={
+          <a
+            href="/api/rpc/debug"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
+          >
+            Debug RPC
+          </a>
+        }
+      />
       <Card title="Recent blocks" headerSlot={<SourceBadge source={result.source} />}>
         {!result.ok && (
-          <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
-            <p className="text-sm text-amber-200/80">
-              {"errorCode" in result && result.errorCode === "endpoint_not_available"
-                ? "DevNet feature — Blocks endpoint not yet exposed"
-                : result.error ?? "Gateway RPC unavailable."}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {"errorCode" in result && result.errorCode === "endpoint_not_available"
-                ? "This is expected during early DevNet phases. The gateway is online — /blocks will be available once implemented."
-                : "Unable to reach the canonical RPC gateway. Check network connectivity."}
-            </p>
+          <div className="mb-4">
+            <RpcErrorBanner
+              error={{
+                error: result.error,
+                errorCode: "errorCode" in result ? result.errorCode : undefined,
+                rpcBase: IPPAN_RPC_BASE,
+                path: "/blocks",
+              }}
+              context="Blocks"
+              showDebugLink={true}
+            />
           </div>
         )}
         {result.ok && result.blocks.length === 0 ? (
