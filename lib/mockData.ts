@@ -4,7 +4,13 @@
  * This module is now **test-only**. The production explorer must never
  * serve mock data. All calls to these helpers MUST be removed from
  * runtime paths (app routes, server components, API routes).
+ * 
+ * STRICT MODE ENFORCEMENT:
+ * - When NEXT_PUBLIC_DEMO_MODE=false (default), all functions in this module
+ *   will throw an error if called at runtime.
+ * - Set NEXT_PUBLIC_DEMO_MODE=true only for local development/testing.
  */
+import { assertDemoModeOrThrow, warnMockDataUsage } from "@/lib/demoMode";
 import type {
   AccountSummary,
   AiStatus,
@@ -292,6 +298,9 @@ function validateMockHashTimers() {
 validateMockHashTimers();
 
 export function mockHashtimer(id: string): HashTimerDetail {
+  assertDemoModeOrThrow("mockHashtimer");
+  warnMockDataUsage("mockHashtimer");
+  
   const normalizedInput = id.trim() || statusSnapshot.head.hash_timer_id;
   const normalizedId = isHashTimerId(normalizedInput) ? normalizedInput : statusSnapshot.head.hash_timer_id;
   const relatedTxs = mockTransactions.filter((tx) => tx.hashTimer.toLowerCase() === normalizedId.toLowerCase());
@@ -320,14 +329,20 @@ export function mockHashtimer(id: string): HashTimerDetail {
 }
 
 export function getHashTimerDetail(id: string): Promise<HashTimerDetail> {
+  assertDemoModeOrThrow("getHashTimerDetail");
+  warnMockDataUsage("getHashTimerDetail");
   return Promise.resolve(mockHashtimer(id));
 }
 
 export function getStatus(): Promise<StatusResponseV1> {
+  assertDemoModeOrThrow("getStatus");
+  warnMockDataUsage("getStatus");
   return Promise.resolve(statusSnapshot);
 }
 
 export function getAiStatus(): Promise<AiStatus> {
+  assertDemoModeOrThrow("getAiStatus");
+  warnMockDataUsage("getAiStatus");
   return Promise.resolve({
     modelHash: "0xmodelhash",
     usingStub: false,
@@ -336,6 +351,8 @@ export function getAiStatus(): Promise<AiStatus> {
 }
 
 export function getHealthStatus(): Promise<HealthStatus> {
+  assertDemoModeOrThrow("getHealthStatus");
+  warnMockDataUsage("getHealthStatus");
   return Promise.resolve({
     consensus: true,
     dhtFile: { mode: "libp2p", healthy: true },
@@ -346,46 +363,68 @@ export function getHealthStatus(): Promise<HealthStatus> {
 }
 
 export function getRecentBlocks(): Promise<BlockSummary[]> {
+  assertDemoModeOrThrow("getRecentBlocks");
+  warnMockDataUsage("getRecentBlocks");
   return Promise.resolve(mockBlocks.map(({ transactions, ...block }) => block));
 }
 
 export function getBlockById(id: string): Promise<BlockDetail | undefined> {
+  assertDemoModeOrThrow("getBlockById");
+  warnMockDataUsage("getBlockById");
   return Promise.resolve(mockBlocks.find((block) => block.id === id));
 }
 
 export function getTransaction(hash: string): Promise<Transaction | undefined> {
+  assertDemoModeOrThrow("getTransaction");
+  warnMockDataUsage("getTransaction");
   return Promise.resolve(mockTransactions.find((tx) => tx.hash === hash));
 }
 
 export function getRecentTransactions(): Promise<Transaction[]> {
+  assertDemoModeOrThrow("getRecentTransactions");
+  warnMockDataUsage("getRecentTransactions");
   return Promise.resolve(mockTransactions.slice(0, 5));
 }
 
 export function getAccount(address: string): Promise<AccountSummary> {
+  assertDemoModeOrThrow("getAccount");
+  warnMockDataUsage("getAccount");
   return Promise.resolve({ ...accountSummary, address });
 }
 
 export function getPayments(): Promise<PaymentEntry[]> {
+  assertDemoModeOrThrow("getPayments");
+  warnMockDataUsage("getPayments");
   return Promise.resolve(payments);
 }
 
 export function getHandleRecord(handle: string): Promise<HandleRecord | undefined> {
+  assertDemoModeOrThrow("getHandleRecord");
+  warnMockDataUsage("getHandleRecord");
   return Promise.resolve(handles.find((record) => record.handle === handle));
 }
 
 export function getFileRecord(id: string): Promise<FileRecord | undefined> {
+  assertDemoModeOrThrow("getFileRecord");
+  warnMockDataUsage("getFileRecord");
   return Promise.resolve(files.find((file) => file.id === id));
 }
 
 export function getFiles(): Promise<FileRecord[]> {
+  assertDemoModeOrThrow("getFiles");
+  warnMockDataUsage("getFiles");
   return Promise.resolve(files);
 }
 
 export function getPeers(): Promise<PeersResponse> {
+  assertDemoModeOrThrow("getPeers");
+  warnMockDataUsage("getPeers");
   return Promise.resolve({ source: "error", peers });
 }
 
 export function getIpndht(): Promise<IpndhtResponse> {
+  assertDemoModeOrThrow("getIpndht");
+  warnMockDataUsage("getIpndht");
   return Promise.resolve({
     source: "error",
     sections: { handles: "error", files: "error", providers: "error", peers: "error" },

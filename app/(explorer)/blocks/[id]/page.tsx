@@ -2,12 +2,14 @@ import Link from "next/link";
 import SimpleTable from "@/components/tables/SimpleTable";
 import JsonViewer from "@/components/common/JsonViewer";
 import { SourceBadge } from "@/components/common/SourceBadge";
+import { RpcErrorBanner } from "@/components/common/RpcErrorBanner";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
 import { fetchBlockDetail } from "@/lib/blocks";
 import { formatAmount, shortenHash } from "@/lib/format";
 import { formatMs, toMsFromUs } from "@/lib/ippanTime";
+import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
 interface BlockDetailPageProps {
   params: { id: string };
@@ -26,12 +28,15 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
           actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} 
         />
         <Card title="DevNet RPC Error" headerSlot={<SourceBadge source="error" />}>
-          <div className="rounded-lg border border-red-900/50 bg-red-950/30 p-4">
-            <p className="text-sm text-red-200/80">{result.error}</p>
-            <p className="mt-2 text-xs text-slate-500">
-              The DevNet node may be temporarily unavailable or the /blocks endpoint is not implemented yet.
-            </p>
-          </div>
+          <RpcErrorBanner
+            error={{
+              error: result.error,
+              rpcBase: IPPAN_RPC_BASE,
+              path: `/blocks/${params.id}`,
+            }}
+            context="Block Detail"
+            showDebugLink={true}
+          />
         </Card>
       </div>
     );
