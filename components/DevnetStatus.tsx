@@ -22,12 +22,15 @@ interface GatewayStatus {
   peerCount?: number;
   consensusRound?: number;
   validatorCount?: number;
+  validatorIds?: string[];
   uptimeSeconds?: number;
   mempoolSize?: number;
   rpcBase?: string;
   lastSuccessTs?: number;
   consecutiveFailures?: number;
 }
+
+type ValidatorSource = "from_validator_ids" | "from_validators_object" | "unknown";
 
 async function fetchGatewayStatus(): Promise<GatewayStatus> {
   try {
@@ -74,6 +77,7 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
       peerCount: typeof data.peer_count === "number" ? data.peer_count : undefined,
       consensusRound: typeof data.consensus?.round === "number" ? data.consensus.round : undefined,
       validatorCount: validatorIds.length,
+      validatorIds: validatorIds,
       uptimeSeconds: typeof data.uptime_seconds === "number" ? data.uptime_seconds : undefined,
       mempoolSize: typeof data.mempool_size === "number" ? data.mempool_size : undefined,
       rpcBase: json.rpc_base,
@@ -102,6 +106,24 @@ function formatUptime(seconds?: number): string {
   return `${hours}h ${minutes}m`;
 }
 
+function getValidatorSource(validatorIds?: string[]): ValidatorSource {
+  if (validatorIds && validatorIds.length > 0) {
+    return "from_validator_ids";
+  }
+  return "unknown";
+}
+
+function getValidatorSourceLabel(source: ValidatorSource): string {
+  switch (source) {
+    case "from_validator_ids":
+      return "from /status.consensus.validator_ids";
+    case "from_validators_object":
+      return "from /status.consensus.validators";
+    default:
+      return "unknown (missing fields)";
+  }
+}
+
 export function DevnetStatus() {
   const [status, setStatus] = useState<GatewayStatus>({ ok: false, loading: true });
 
@@ -119,6 +141,18 @@ export function DevnetStatus() {
       cancelled = true;
     };
   }, []);
+
+  // Compute validator identity info
+  const validatorIds = status.validatorIds ?? [];
+  const uniqueValidatorIds = new Set(validatorIds);
+  const hasDuplicateValidatorIds = uniqueValidatorIds.size < validatorIds.length && validatorIds.length > 0;
+  const peerValidatorMismatch = status.peerCount !== undefined && 
+    status.peerCount > 1 && 
+    uniqueValidatorIds.size === 1 && 
+    validatorIds.length > 0;
+  
+  const validatorSource = getValidatorSource(validatorIds);
+  const hasIdentityWarning = hasDuplicateValidatorIds || peerValidatorMismatch;
 
   return (
     <div className="space-y-3 text-xs">
@@ -151,7 +185,18 @@ export function DevnetStatus() {
             <StatItem label="Version" value={status.version ?? "—"} />
             <StatItem label="Network" value={status.networkActive ? "Active" : "Inactive"} />
             <StatItem label="Peers" value={status.peerCount?.toString() ?? "—"} />
-            <StatItem label="Validators" value={status.validatorCount?.toString() ?? "—"} />
+            <StatItem 
+              label="Validators" 
+              value={status.validatorCount?.toString() ?? "—"} 
+              warn={hasIdentityWarning}
+              tooltip={
+                hasIdentityWarning 
+                  ? hasDuplicateValidatorIds 
+                    ? "Duplicate validator IDs detected! Multiple nodes may share the same identity key."
+                    : `Peer/validator mismatch: ${status.peerCount} peers but only ${uniqueValidatorIds.size} validator ID`
+                  : undefined
+              }
+            />
             <StatItem label="Round" value={status.consensusRound !== undefined ? `#${status.consensusRound}` : "—"} />
             <StatItem label="Uptime" value={formatUptime(status.uptimeSeconds)} />
             <StatItem 
@@ -160,6 +205,45 @@ export function DevnetStatus() {
               tooltip="Mempool size = pending transactions at this node. A value of 0 means no pending transactions right now (network may be idle or transactions are being processed quickly)."
             />
           </div>
+          
+          {/* Validator source indicator */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-slate-500">Validator count source:</span>
+            <span className={`rounded border px-1.5 py-0.5 text-[10px] ${
+              validatorSource === "unknown" 
+                ? "border-amber-700/50 bg-amber-900/30 text-amber-300"
+                : "border-blue-700/50 bg-blue-900/30 text-blue-300"
+            }`}>
+              {getValidatorSourceLabel(validatorSource)}
+            </span>
+          </div>
+
+          {/* Identity warning */}
+          {hasIdentityWarning && (
+            <div className="mt-2 rounded border border-amber-900/50 bg-amber-950/30 p-2">
+              <div className="flex items-center gap-1.5 text-amber-300">
+                <span>⚠️</span>
+                <span className="font-medium">
+                  {hasDuplicateValidatorIds 
+                    ? "Duplicate Validator IDs" 
+                    : "Peer/Validator Mismatch"}
+                </span>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-400">
+                {hasDuplicateValidatorIds 
+                  ? `Gateway reports ${validatorIds.length} validators but only ${uniqueValidatorIds.size} unique ID${uniqueValidatorIds.size === 1 ? "" : "s"}. Nodes may share identity keys.`
+                  : `Gateway sees ${status.peerCount} peers but only ${uniqueValidatorIds.size} validator identity. Check DLC config or identity keys.`
+                }
+              </p>
+              <a 
+                href="/status" 
+                className="mt-1 inline-block text-[10px] text-amber-200 underline-offset-2 hover:underline"
+              >
+                View Validator Identities →
+              </a>
+            </div>
+          )}
+
           <p className="text-[10px] text-slate-500 mt-2">
             Data from single canonical RPC gateway via /api/rpc/status proxy. Validator details available on Status page.
           </p>
@@ -210,21 +294,40 @@ export function DevnetStatus() {
   );
 }
 
-function StatItem({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
+function StatItem({ 
+  label, 
+  value, 
+  tooltip,
+  warn = false,
+}: { 
+  label: string; 
+  value: string; 
+  tooltip?: string;
+  warn?: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded bg-slate-900/40 px-2 py-1">
+    <div className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${
+      warn ? "bg-amber-950/30 border border-amber-900/50" : "bg-slate-900/40"
+    }`}>
       <span className="text-slate-500 flex items-center gap-1">
         {label}
         {tooltip && (
           <span
-            className="cursor-help select-none rounded-full border border-slate-700/70 bg-slate-900/70 px-1 py-0.5 text-[8px] leading-none text-slate-400"
+            className={`cursor-help select-none rounded-full border px-1 py-0.5 text-[8px] leading-none ${
+              warn 
+                ? "border-amber-700/70 bg-amber-900/70 text-amber-300" 
+                : "border-slate-700/70 bg-slate-900/70 text-slate-400"
+            }`}
             title={tooltip}
           >
-            ?
+            {warn ? "!" : "?"}
           </span>
         )}
       </span>
-      <span className="text-slate-200 font-medium">{value}</span>
+      <span className={`font-medium ${warn ? "text-amber-200" : "text-slate-200"}`}>
+        {value}
+        {warn && <span className="ml-1">⚠️</span>}
+      </span>
     </div>
   );
 }

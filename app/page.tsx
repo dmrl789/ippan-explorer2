@@ -7,6 +7,7 @@ import { DevnetStatus } from "@/components/DevnetStatus";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
 import { fetchStatusWithSource } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
@@ -34,8 +35,17 @@ export default async function DashboardPage() {
   // DevNet is considered OK if we got valid status data
   const devnetOk = statusRes.ok && status?.status === "ok";
   
-  // Get validator count from consensus data
-  const validatorCount = status?.consensus?.validator_ids?.length ?? 0;
+  // Get validator count and source info
+  const validatorIds = status?.consensus?.validator_ids ?? [];
+  const { source: validatorSource, count: validatorCount } = getValidatorSource(status);
+  
+  // Detect potential issues
+  const uniqueValidatorIds = new Set(validatorIds);
+  const hasDuplicateValidatorIds = uniqueValidatorIds.size < validatorIds.length;
+  const peerValidatorMismatch = status?.peer_count !== undefined && 
+    status.peer_count > 1 && 
+    uniqueValidatorIds.size === 1 && 
+    validatorIds.length > 0;
 
   return (
     <div className="space-y-6">
@@ -61,6 +71,36 @@ export default async function DashboardPage() {
       <Card title="DevNet status" description="Live status from single canonical RPC gateway">
         <DevnetStatus />
       </Card>
+
+      {/* Validator Identity Warning Banner */}
+      {devnetOk && (hasDuplicateValidatorIds || peerValidatorMismatch) && (
+        <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-amber-300 font-medium text-sm">⚠️ Validator Identity Warning</span>
+            <StatusPill status="warn" />
+          </div>
+          {hasDuplicateValidatorIds ? (
+            <p className="text-sm text-slate-300">
+              <strong>Duplicate validator IDs detected:</strong> The gateway reports {validatorIds.length} validator entries 
+              but only {uniqueValidatorIds.size} unique ID{uniqueValidatorIds.size === 1 ? "" : "s"}. 
+              This may indicate nodes sharing the same identity key.
+            </p>
+          ) : peerValidatorMismatch ? (
+            <p className="text-sm text-slate-300">
+              <strong>Peer/validator count mismatch:</strong> Gateway sees {status?.peer_count} peers but only {uniqueValidatorIds.size} validator identity. 
+              This may indicate DLC config issues or duplicate identity keys.
+            </p>
+          ) : null}
+          <div className="mt-2">
+            <Link 
+              href="/status" 
+              className="text-xs text-amber-200 underline-offset-4 hover:underline"
+            >
+              View Validator Identities →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Main Node Status Card */}
       <Card
@@ -145,6 +185,7 @@ export default async function DashboardPage() {
             source={statusSource}
             subtitle="Operator + AI"
             value={devnetOk ? `${validatorCount} validators` : "—"}
+            warn={hasDuplicateValidatorIds || peerValidatorMismatch}
           />
         </div>
       </Card>
@@ -156,11 +197,31 @@ export default async function DashboardPage() {
           headerSlot={<SourceBadge source={statusSource} />}
         >
           {devnetOk && status ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
-              <DetailItem label="Validators" value={validatorCount.toString()} />
-              <DetailItem label="Metrics Available" value={status.consensus.metrics_available ? "Yes" : "No"} />
-              <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
+                <DetailItem 
+                  label="Validators" 
+                  value={validatorCount.toString()} 
+                  secondary={
+                    hasDuplicateValidatorIds 
+                      ? `${uniqueValidatorIds.size} unique` 
+                      : undefined
+                  }
+                />
+                <DetailItem label="Metrics Available" value={status.consensus.metrics_available ? "Yes" : "No"} />
+                <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
+              </div>
+              <ValidatorSourceBadge source={validatorSource} />
+              {(hasDuplicateValidatorIds || peerValidatorMismatch) && (
+                <div className="mt-2 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1.5">
+                  <span className="text-[10px] text-amber-300">
+                    {hasDuplicateValidatorIds 
+                      ? "⚠️ Duplicate validator IDs detected" 
+                      : "⚠️ Peer/validator mismatch"}
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
@@ -252,7 +313,16 @@ export default async function DashboardPage() {
         <Card
           title="Validators"
           description="Active validators on the DevNet"
-          headerSlot={<SourceBadge source={statusSource} />}
+          headerSlot={
+            <div className="flex items-center gap-2">
+              <SourceBadge source={statusSource} />
+              {(hasDuplicateValidatorIds || peerValidatorMismatch) && (
+                <span className="rounded border border-amber-700/50 bg-amber-900/30 px-1.5 py-0.5 text-[10px] text-amber-300">
+                  ⚠️ identity issue
+                </span>
+              )}
+            </div>
+          }
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -328,22 +398,33 @@ function FeatureCard({
   subtitle,
   href,
   value,
-  source
+  source,
+  warn = false,
 }: {
   title: string;
   subtitle: string;
   href: Route;
   value: string | ReactNode;
   source: "live" | "error";
+  warn?: boolean;
 }) {
   return (
-    <div className="flex flex-col justify-between rounded-lg border border-slate-800/70 bg-slate-950/50 px-4 py-3">
+    <div className={`flex flex-col justify-between rounded-lg border px-4 py-3 ${
+      warn 
+        ? "border-amber-900/50 bg-amber-950/20" 
+        : "border-slate-800/70 bg-slate-950/50"
+    }`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">{subtitle}</p>
           <p className="text-lg font-semibold text-slate-100">{title}</p>
         </div>
-        <SourceBadge source={source} />
+        <div className="flex items-center gap-1">
+          {warn && (
+            <span className="text-amber-400 text-xs" title="Potential identity issue detected">⚠️</span>
+          )}
+          <SourceBadge source={source} />
+        </div>
       </div>
       <div className="mt-3 flex items-center justify-between">
         <div className="text-sm text-slate-200">{value}</div>

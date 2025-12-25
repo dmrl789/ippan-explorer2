@@ -3,9 +3,13 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
+import { ValidatorIdentityPanel } from "@/components/common/ValidatorIdentityPanel";
+import { GatewayTruth } from "@/components/common/GatewayTruth";
 import { fetchAiStatusWithSource } from "@/lib/ai";
 import { fetchHealthWithSource } from "@/lib/health";
 import { fetchStatusWithSource } from "@/lib/status";
+import { fetchPeers } from "@/lib/peers";
 
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -19,13 +23,20 @@ function formatUptime(seconds: number): string {
 }
 
 export default async function StatusPage() {
-  const [healthRes, aiRes, statusRes] = await Promise.all([fetchHealthWithSource(), fetchAiStatusWithSource(), fetchStatusWithSource()]);
+  const [healthRes, aiRes, statusRes, peersRes] = await Promise.all([
+    fetchHealthWithSource(), 
+    fetchAiStatusWithSource(), 
+    fetchStatusWithSource(),
+    fetchPeers(),
+  ]);
   const healthSource = healthRes.ok ? healthRes.source : "error";
   const aiSource = aiRes.ok ? (aiRes.source === "missing" ? "live" : aiRes.source) : "error";
   const statusSource = statusRes.ok ? statusRes.source : "error";
 
   const status = statusRes.ok ? statusRes.status : undefined;
-  const validatorCount = status?.consensus?.validator_ids?.length ?? 0;
+  const validatorIds = status?.consensus?.validator_ids ?? [];
+  const { source: validatorSource, count: validatorCount } = getValidatorSource(status);
+  const peerCount = status?.peer_count ?? peersRes.peers.length;
 
   return (
     <div className="space-y-6">
@@ -70,7 +81,13 @@ export default async function StatusPage() {
               <KeyValue label="Peer Count" value={status.peer_count.toString()} />
               <KeyValue label="Mempool Size" value={status.mempool_size.toString()} />
               <KeyValue label="Consensus Round" value={`#${status.consensus.round}`} />
-              <KeyValue label="Validators" value={validatorCount.toString()} />
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400">Validators</span>
+                  <span className="font-semibold text-slate-100">{validatorCount}</span>
+                </div>
+                <ValidatorSourceBadge source={validatorSource} />
+              </div>
               <p className="text-xs text-slate-500">
                 Status reflects this explorer&apos;s connected RPC node view.
               </p>
@@ -122,6 +139,82 @@ export default async function StatusPage() {
           )}
         </Card>
       </div>
+
+      {/* Validator Identity Panel */}
+      <Card 
+        title="Validator Identities" 
+        description="Validator IDs from /status with duplicate detection"
+        headerSlot={<ValidatorSourceBadge source={validatorSource} />}
+      >
+        {status ? (
+          <ValidatorIdentityPanel 
+            validatorIds={validatorIds}
+            selfId={status.consensus.self_id}
+            peerCount={peerCount}
+          />
+        ) : (
+          <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+            <p className="text-sm text-slate-400">
+              {validatorSource === "unknown" 
+                ? "Node RPC lacks validator visibility — consensus.validator_ids not available"
+                : "Validator identity data unavailable — gateway error"}
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* Peer Identity Section */}
+      <Card
+        title="Peer Identities"
+        description="Peer IDs from /peers endpoint"
+        headerSlot={<SourceBadge source={peersRes.ok ? peersRes.source : "error"} />}
+      >
+        {peersRes.ok && peersRes.peers.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-400">Total peers:</span>
+              <span className="text-sm font-semibold text-slate-100">{peersRes.peers.length}</span>
+            </div>
+            <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 overflow-hidden">
+              <div className="px-3 py-2 border-b border-slate-800/70">
+                <span className="text-xs uppercase tracking-wide text-slate-500">Peer IDs</span>
+              </div>
+              <div className="divide-y divide-slate-800/50 max-h-48 overflow-y-auto">
+                {peersRes.peers.map((peer, i) => (
+                  <div key={peer.peer_id || i} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="font-mono text-xs text-slate-300 truncate" title={peer.peer_id}>
+                      {peer.peer_id ? `${peer.peer_id.slice(0, 16)}…${peer.peer_id.slice(-8)}` : "unknown"}
+                    </span>
+                    {peer.agent && (
+                      <span className="text-[10px] text-slate-500 truncate max-w-[120px]" title={peer.agent}>
+                        {peer.agent}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+            <p className="text-sm text-slate-400">
+              {!peersRes.ok && peersRes.errorCode === "endpoint_not_available"
+                ? "/peers endpoint not available on this DevNet"
+                : peersRes.peers.length === 0
+                  ? "/peers returned empty — no peer data available"
+                  : !peersRes.ok 
+                    ? peersRes.error 
+                    : "Peer data unavailable"}
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* Gateway Truth Section */}
+      <GatewayTruth 
+        status={status}
+        fetchTimestamp={Date.now()}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Raw /health JSON">
