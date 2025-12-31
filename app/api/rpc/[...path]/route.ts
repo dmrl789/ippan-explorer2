@@ -9,7 +9,7 @@
  * 
  * Usage: GET /api/rpc/some/path → proxies to ${IPPAN_RPC_BASE_URL}/some/path
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { proxyRpcRequest } from "@/lib/rpcProxy";
 
 export const dynamic = "force-dynamic";
@@ -59,15 +59,10 @@ function isAllowedPath(path: string): boolean {
   });
 }
 
-interface RouteContext {
-  params: Promise<{ path: string[] }>;
-}
-
 export async function GET(
-  request: Request,
-  context: RouteContext
+  request: NextRequest,
+  { params }: { params: { path: string[] } }
 ): Promise<NextResponse> {
-  const params = await context.params;
   const pathSegments = params.path;
   
   if (!pathSegments || pathSegments.length === 0) {
@@ -127,10 +122,9 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
-  context: RouteContext
+  request: NextRequest,
+  { params }: { params: { path: string[] } }
 ): Promise<NextResponse> {
-  const params = await context.params;
   const pathSegments = params.path;
   
   if (!pathSegments || pathSegments.length === 0) {

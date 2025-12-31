@@ -60,10 +60,10 @@ export function IppanTimeCard({
     setLocalTime(new Date().toISOString());
 
     // Compute clock delta on client
-    if (ippanTime?.timeMs !== null && ippanTime?.isUnixEpoch) {
+    if (ippanTime && ippanTime.timeMs !== null && ippanTime.isUnixEpoch) {
       const delta = computeClockDelta(ippanTime.timeMs);
       setClockDelta(formatClockDelta(delta));
-    } else if (ippanTime?.timeMs !== null) {
+    } else if (ippanTime && ippanTime.timeMs !== null) {
       setClockDelta("N/A (ledger-relative time)");
     } else {
       setClockDelta("—");
@@ -72,17 +72,17 @@ export function IppanTimeCard({
     // Update delta every second
     const interval = setInterval(() => {
       setLocalTime(new Date().toISOString());
-      if (ippanTime?.timeMs !== null && ippanTime?.isUnixEpoch) {
+      if (ippanTime && ippanTime.timeMs !== null && ippanTime.isUnixEpoch) {
         const delta = computeClockDelta(ippanTime.timeMs);
         setClockDelta(formatClockDelta(delta));
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [ippanTime?.timeMs, ippanTime?.isUnixEpoch]);
+  }, [ippanTime]);
 
-  const hasIppanTime = ippanTime?.timeUs !== null;
-  const hasHashTimer = hashTimerData?.hashTimer !== null;
+  const hasIppanTime = ippanTime !== null && ippanTime.timeUs !== null;
+  const hasHashTimer = hashTimerData !== null && hashTimerData.hashTimer !== null;
 
   return (
     <Card
