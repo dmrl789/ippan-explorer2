@@ -6,6 +6,8 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
 import { ValidatorIdentityPanel } from "@/components/common/ValidatorIdentityPanel";
 import { GatewayTruth } from "@/components/common/GatewayTruth";
+import { IppanTimeCard } from "@/components/IppanTimeCard";
+import { RawStatusViewer } from "@/components/RawStatusViewer";
 import { fetchAiStatusWithSource } from "@/lib/ai";
 import { fetchHealthWithSource } from "@/lib/health";
 import { fetchStatusWithSource } from "@/lib/status";
@@ -34,6 +36,9 @@ export default async function StatusPage() {
   const statusSource = statusRes.ok ? statusRes.source : "error";
 
   const status = statusRes.ok ? statusRes.status : undefined;
+  const rawStatus = statusRes.ok ? statusRes.rawStatus : (statusRes.rawStatus ?? null);
+  const ippanTime = statusRes.ok ? statusRes.ippanTime : null;
+  const hashTimerData = statusRes.ok ? statusRes.hashTimerData : null;
   const validatorIds = status?.consensus?.validator_ids ?? [];
   const { source: validatorSource, count: validatorCount } = getValidatorSource(status);
   const peerCount = status?.peer_count ?? peersRes.peers.length;
@@ -210,32 +215,90 @@ export default async function StatusPage() {
         )}
       </Card>
 
+      {/* IPPAN Time Section - Dedicated time display */}
+      <Card 
+        title="Time & Ordering" 
+        description="IPPAN Time, HashTimers, and ordering fields"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <IppanTimeCard
+            ippanTime={ippanTime}
+            hashTimerData={hashTimerData}
+            source={statusSource}
+            loading={false}
+          />
+          
+          {/* Time Info Panel */}
+          <div className="space-y-3">
+            <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 p-4">
+              <h4 className="text-sm font-semibold text-slate-200 mb-2">About IPPAN Time</h4>
+              <p className="text-xs text-slate-400 mb-2">
+                IPPAN uses HashTimers for ordering. Time fields in the /status response 
+                indicate the network&apos;s view of time, which may differ from wall clock time.
+              </p>
+              <ul className="text-xs text-slate-500 space-y-1">
+                <li>• <strong className="text-slate-400">IPPAN Time (μs)</strong>: Network time in microseconds</li>
+                <li>• <strong className="text-slate-400">HashTimer</strong>: 64-char hex ordering anchor</li>
+                <li>• <strong className="text-slate-400">Clock Delta</strong>: Difference from local time</li>
+              </ul>
+            </div>
+            
+            {/* Time Source Info */}
+            {ippanTime?.sourceField && (
+              <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 p-3">
+                <p className="text-xs text-emerald-300">
+                  ✓ Time found in field: <code className="bg-slate-900/50 px-1 rounded">{ippanTime.sourceField}</code>
+                </p>
+              </div>
+            )}
+            
+            {!ippanTime?.sourceField && (
+              <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
+                <p className="text-xs text-amber-300">
+                  ⚠ No recognized time field found in /status response
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Check the &quot;All Fields&quot; view below for available time data
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {/* Gateway Truth Section */}
       <GatewayTruth 
         status={status}
         fetchTimestamp={Date.now()}
       />
 
+      {/* Raw Status with All Fields View */}
+      {rawStatus && (
+        <RawStatusViewer
+          data={rawStatus}
+          title="Raw /status JSON"
+          description="Complete response from gateway RPC - includes all fields (known and unknown)"
+          defaultView="collapsed"
+        />
+      )}
+
+      {/* Health and AI Raw Data */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Raw /health JSON">
           <JsonViewer data={healthRes.ok ? healthRes.health : { error: healthRes.error }} />
         </Card>
-        <Card title="Raw /status JSON">
-          <JsonViewer data={statusRes.ok ? statusRes.status : { error: statusRes.error }} />
+        <Card title="Raw /ai/status JSON">
+          <JsonViewer
+            data={
+              aiRes.ok
+                ? aiRes.aiAvailable
+                  ? aiRes.ai
+                  : { note: aiRes.source === "missing" ? aiRes.message : "AI status unavailable." }
+                : { error: aiRes.error }
+            }
+          />
         </Card>
       </div>
-
-      <Card title="Raw /ai/status JSON">
-        <JsonViewer
-          data={
-            aiRes.ok
-              ? aiRes.aiAvailable
-                ? aiRes.ai
-                : { note: aiRes.source === "missing" ? aiRes.message : "AI status unavailable." }
-              : { error: aiRes.error }
-          }
-        />
-      </Card>
     </div>
   );
 }
