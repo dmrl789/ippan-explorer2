@@ -7,6 +7,14 @@ function normalizeRpcBase(rawBase?: string): string | undefined {
 
 export const DEFAULT_RPC_BASE = "http://188.245.97.41:8080"; // fallback DevNet node
 
+/**
+ * Check if we're running in a browser environment.
+ * Used to determine whether to use the proxy or direct RPC.
+ */
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
+}
+
 function getRpcBaseFromEnv(): string | undefined {
   const rawBase =
     process.env.NEXT_PUBLIC_IPPAN_RPC_BASE ??
@@ -39,11 +47,32 @@ function getRpcBase(): string {
 /**
  * Resolved RPC base URL used across the explorer.
  * This is always a non-empty string (falls back to a known DevNet node).
+ * 
+ * NOTE: This is the DIRECT HTTP URL. On the browser, you should use
+ * the /api/rpc/* proxy instead to avoid mixed content issues.
+ * Use getEffectiveRpcBase() for automatic handling.
  */
 export const IPPAN_RPC_BASE = getRpcBase();
 
 export function getEnvRpcBaseUrl(): string | undefined {
   return getRpcBaseFromEnv();
+}
+
+/**
+ * Get the effective RPC base URL for the current environment.
+ * - Browser: Returns "" (empty string) to use same-origin /api/rpc/* proxy
+ * - Server: Returns the direct RPC base URL
+ * 
+ * This automatically handles mixed content issues by using the proxy
+ * when running in the browser.
+ */
+export function getEffectiveRpcBase(): string {
+  // In browser, use the proxy to avoid mixed content (HTTPS -> HTTP blocked)
+  if (isBrowser()) {
+    return "/api/rpc";
+  }
+  // On server, use direct RPC base
+  return IPPAN_RPC_BASE;
 }
 
 /**
@@ -81,7 +110,7 @@ export function requireRpcBaseUrl(): string {
 
 export function buildRpcUrl(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base = requireRpcBaseUrl();
+  const base = getEffectiveRpcBase();
   return `${base}${normalizedPath}`;
 }
 
@@ -89,7 +118,8 @@ async function safeJsonFetchWithStatusInternal<T>(
   path: string,
   init?: RequestInit,
 ): Promise<{ status: number | null; data: T | null; url: string }> {
-  const base = requireRpcBaseUrl().replace(/\/+$/, "");
+  // Use proxy in browser to avoid mixed content (HTTPS -> HTTP blocked)
+  const base = getEffectiveRpcBase().replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${base}${normalizedPath}`;
 
@@ -108,24 +138,40 @@ async function safeJsonFetchWithStatusInternal<T>(
     });
 
     if (!res.ok) {
-      if (typeof window !== "undefined") {
+      if (isBrowser()) {
         // eslint-disable-next-line no-console
         console.error(`RPC error ${res.status} for ${url}`);
       }
       return { status: res.status, data: null, url };
     }
 
+    // When using the proxy, the response is wrapped in { ok, data, ... }
+    // When using direct RPC, the response is the raw data
+    let jsonData: unknown;
     try {
-      return { status: res.status, data: (await res.json()) as T, url };
+      jsonData = await res.json();
     } catch (err) {
-      if (typeof window !== "undefined") {
+      if (isBrowser()) {
         // eslint-disable-next-line no-console
         console.error("RPC JSON parse failed for", url, err);
       }
       return { status: res.status, data: null, url };
     }
+
+    // Handle proxy response format
+    if (isBrowser() && jsonData && typeof jsonData === "object" && "ok" in jsonData) {
+      const proxyResponse = jsonData as { ok: boolean; data?: T; status_code?: number; error?: string };
+      if (proxyResponse.ok && proxyResponse.data !== undefined) {
+        return { status: proxyResponse.status_code ?? res.status, data: proxyResponse.data, url };
+      }
+      // Proxy returned error
+      return { status: proxyResponse.status_code ?? res.status, data: null, url };
+    }
+
+    // Direct RPC response (server-side)
+    return { status: res.status, data: jsonData as T, url };
   } catch (err) {
-    if (typeof window !== "undefined") {
+    if (isBrowser()) {
       // eslint-disable-next-line no-console
       console.error("RPC fetch failed for", url, err);
     }
@@ -154,7 +200,7 @@ export async function safeJsonFetch<T>(path: string, init?: RequestInit): Promis
  */
 export async function rpcFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const base = requireRpcBaseUrl();
+  const base = getEffectiveRpcBase();
   const { status, data } = await safeJsonFetchWithStatusInternal<T>(normalizedPath, init);
 
   if (data === null) {

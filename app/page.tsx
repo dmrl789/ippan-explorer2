@@ -59,7 +59,7 @@ export default async function DashboardPage() {
         description="Devnet-only explorer: live IPPAN devnet RPC (no mock/demo data)"
         actions={
           <a
-            href={rpcBase ? `${rpcBase}/status` : "/api/status"}
+            href="/api/rpc/status"
             target="_blank"
             rel="noreferrer"
             className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"

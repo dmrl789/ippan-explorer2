@@ -274,16 +274,14 @@ export function DevnetStatus() {
             >
               Open Debug Panel
             </a>
-            {status.rpcBase && (
-              <a
-                href={`${status.rpcBase}/status`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[10px] text-slate-300 hover:border-slate-600 hover:text-slate-100"
-              >
-                Check /status directly
-              </a>
-            )}
+            <a
+              href="/api/rpc/status"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[10px] text-slate-300 hover:border-slate-600 hover:text-slate-100"
+            >
+              View /status JSON
+            </a>
           </div>
           <p className="text-[10px] text-slate-500 mt-2">
             The Explorer requires the canonical RPC gateway to be reachable. Check network connectivity.

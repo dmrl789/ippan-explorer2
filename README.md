@@ -64,10 +64,12 @@ Internal DevNet peer graph
 ```
 
 All RPC calls are proxied through Next.js API routes to:
-- Eliminate CORS issues
-- Avoid mixed-content restrictions
-- Provide consistent error handling
-- Enable server-side timeouts
+- **Eliminate mixed-content issues**: HTTPS site (Vercel) cannot fetch from HTTP RPC directly
+- **Avoid CORS restrictions**: Server-side fetching bypasses browser CORS policies
+- **Provide consistent error handling**: Structured error responses with error codes
+- **Enable server-side timeouts**: 5-second timeout with proper abort handling
+
+**Important**: The browser NEVER makes direct HTTP requests to the RPC gateway. All requests go through `/api/rpc/*` which runs server-side on Vercel.
 
 ### Available API Proxy Routes
 

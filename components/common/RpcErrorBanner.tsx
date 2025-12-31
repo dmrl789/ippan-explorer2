@@ -109,16 +109,14 @@ export function RpcErrorBanner({ error, context, showDebugLink = true }: RpcErro
             Open Debug Panel
           </a>
         )}
-        {error.rpcBase && (
-          <a
-            href={`${error.rpcBase}/status`}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-slate-300 hover:border-slate-600 hover:text-slate-100"
-          >
-            Check /status directly
-          </a>
-        )}
+        <a
+          href="/api/rpc/status"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-slate-300 hover:border-slate-600 hover:text-slate-100"
+        >
+          View /status JSON
+        </a>
         <button
           onClick={() => setShowDetails(!showDetails)}
           className="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-slate-300 hover:border-slate-600 hover:text-slate-100"
