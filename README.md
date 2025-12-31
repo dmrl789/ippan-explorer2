@@ -5,8 +5,10 @@ A modern Next.js + Tailwind CSS explorer for the IPPAN network. This repo is **d
 ## What this explorer shows
 
 - **L1 (consensus + chain)**: `/status` snapshot, blocks, transactions, accounts.
+- **IPPAN Time & HashTimers**: Network time extraction with clock delta display and HashTimer ordering anchors.
 - **IPNDHT (files + handles + providers)**: file descriptors, handle resolution, and (when available) provider/peer context.
 - **AI / L2 modules**: a high-level launchpad for L2 surfaces (AI fairness scoring, InfoLAW, etc.) derived from **L1 status + IPNDHT descriptors**, without inventing its own state.
+- **All Fields View**: Raw JSON viewer that displays ALL fields from RPC responses, including unknown/new fields without requiring code changes.
 
 ## Getting started
 
@@ -78,6 +80,27 @@ All RPC calls are proxied through Next.js API routes to:
 | `GET /api/rpc/tx/[hash]` | Proxy to `/tx/[hash]` |
 | `GET /api/rpc/account/[hex]` | Proxy to `/accounts/[hex]` |
 | `GET /api/rpc/debug` | Diagnostic bundle (probes all endpoints) |
+| `GET /api/rpc/*` | Catch-all proxy with allowlist (see below) |
+
+### Catch-all RPC Proxy
+
+The `/api/rpc/[...path]` route provides a catch-all proxy for any RPC endpoint. It:
+
+- **Enforces an allowlist** of known paths to prevent SSRF attacks
+- **Sets a 5-second timeout** for all requests
+- **Returns structured errors** with error codes
+- **Adds Cache-Control headers** appropriate for devnet UI
+
+Allowed path prefixes:
+- `/status`, `/health`, `/blocks`, `/block`, `/tx`
+- `/accounts`, `/account`, `/handles`, `/handle`
+- `/files`, `/file`, `/ipndht`, `/peers`, `/peer`
+- `/l2`, `/ai`, `/hashtimers`, `/hashtimer`
+- `/debug`, `/consensus`, `/network`, `/metrics`
+
+### Security Note
+
+The proxy allowlist prevents Server-Side Request Forgery (SSRF) by only forwarding requests to known IPPAN RPC endpoints. Unknown paths return a 403 error.
 
 ### The `/api/rpc/debug` Endpoint
 
@@ -138,9 +161,35 @@ This explorer is wired to the current IPPAN DevNet and never shows mocked data.
 - `/status` – Operator/cluster view combining `/health`, `/status`, and `/ai/status` (if exposed by your devnet RPC).
 - `/l2` – L2 modules list driven by config + IPNDHT tag footprint (no invented state).
 
-## HashTimer spec
+## IPPAN Time & HashTimer
+
+### IPPAN Time
+
+The explorer extracts and displays IPPAN Time from multiple possible field names in the `/status` response:
+
+- **Microsecond fields**: `ippan_time_us`, `network_time_us`, `time_us`, `now_us`
+- **Millisecond fields**: `ippan_time_ms`, `network_time_ms`, `time_ms`
+- **Nested paths**: `head.ippan_time_us`, `consensus.time_us`, etc.
+
+The UI displays:
+- **IPPAN Time (μs)**: Raw network time in microseconds
+- **Network Time (UTC)**: ISO timestamp if the time is unix-epoch based
+- **Clock Delta**: Client-side computed difference from local time
+- **Time Type**: Indicates if the time is unix-epoch (convertible) or ledger-relative
+
+### HashTimer spec
 
 HashTimers follow the IPPAN format: a 64-character lowercase hexadecimal string with no prefix, shaped as `<14-hex time prefix><50-hex BLAKE3 hash>`. The explorer enforces this canonical format in UI rendering: invalid values get a red badge.
+
+### All Fields View
+
+The "Raw /status JSON" viewer includes an "All Fields" mode that:
+- Flattens the entire response into searchable path-value pairs
+- Shows every field including unknown/new ones
+- Never hides data - ensures full transparency
+- Includes search/filter functionality
+
+This ensures the explorer can display new fields added to the RPC without code changes.
 
 ## L2 hooks on L1
 

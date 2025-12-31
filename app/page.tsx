@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
+import { IppanTimeCard } from "@/components/IppanTimeCard";
+import { RawStatusViewer } from "@/components/RawStatusViewer";
 import { fetchStatusWithSource } from "@/lib/status";
 import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
@@ -29,6 +31,9 @@ export default async function DashboardPage() {
   const rpcBase = getRpcBaseUrl();
   const status = statusRes.ok ? statusRes.status : undefined;
   const statusSource = statusRes.ok ? statusRes.source : "error";
+  const rawStatus = statusRes.ok ? statusRes.rawStatus : (statusRes.rawStatus ?? null);
+  const ippanTime = statusRes.ok ? statusRes.ippanTime : null;
+  const hashTimerData = statusRes.ok ? statusRes.hashTimerData : null;
   const peers = peersRes.peers;
   const peersSource = peersRes.ok ? peersRes.source : "error";
 
@@ -141,6 +146,44 @@ export default async function DashboardPage() {
           </div>
         )}
       </Card>
+
+      {/* IPPAN Time Card - prominent display of network time */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <IppanTimeCard
+          ippanTime={ippanTime}
+          hashTimerData={hashTimerData}
+          source={statusSource}
+          loading={false}
+        />
+        
+        {/* Quick Node Stats for second column */}
+        <Card
+          title="Quick Stats"
+          description="Key metrics from /status"
+          headerSlot={<SourceBadge source={statusSource} />}
+        >
+          {devnetOk && status ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
+              <DetailItem 
+                label="Validators" 
+                value={validatorCount.toString()} 
+                secondary={
+                  hasDuplicateValidatorIds 
+                    ? `${uniqueValidatorIds.size} unique` 
+                    : undefined
+                }
+              />
+              <DetailItem label="Peer Count" value={status.peer_count.toString()} />
+              <DetailItem label="Mempool Size" value={status.mempool_size.toString()} />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">Stats unavailable</p>
+            </div>
+          )}
+        </Card>
+      </div>
 
       <Card title="Explore" description="Entry points for L1, IPNDHT, and L2 surfaces">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
@@ -358,6 +401,16 @@ export default async function DashboardPage() {
             </table>
           </div>
         </Card>
+      )}
+
+      {/* Raw /status JSON Viewer */}
+      {rawStatus && (
+        <RawStatusViewer
+          data={rawStatus}
+          title="Raw /status JSON"
+          description="Complete response from gateway RPC - includes all fields (known and unknown)"
+          defaultView="collapsed"
+        />
       )}
     </div>
   );
