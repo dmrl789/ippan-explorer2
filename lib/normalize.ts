@@ -140,7 +140,7 @@ export function normalizeTxRecent(response: unknown): TxRecentItem[] {
   if (!response) return [];
   
   // Handle proxy wrapper
-  const data = (response as { data?: unknown }).data ?? response;
+  const data = unwrap(response);
   
   // Find the array
   let rawList: unknown[];
@@ -211,7 +211,7 @@ export function normalizeTxDetail(response: unknown): TxDetail | null {
   if (!response) return null;
   
   // Handle proxy wrapper
-  const data = (response as { data?: unknown }).data ?? response;
+  const data = unwrap(response);
   
   if (!data || typeof data !== "object") return null;
   
@@ -281,7 +281,7 @@ export function normalizeBlockList(response: unknown): BlockSummary[] {
   if (!response) return [];
   
   // Handle proxy wrapper
-  const data = (response as { data?: unknown }).data ?? response;
+  const data = unwrap(response);
   
   // Find the array
   let rawList: unknown[];
@@ -346,7 +346,7 @@ export function normalizeBlock(response: unknown): BlockDetail | null {
   if (!response) return null;
   
   // Handle proxy wrapper
-  const data = (response as { data?: unknown }).data ?? response;
+  const data = unwrap(response);
   
   if (!data || typeof data !== "object") return null;
   
@@ -397,7 +397,7 @@ export function normalizeRound(response: unknown): RoundDetail | null {
   if (!response) return null;
   
   // Handle proxy wrapper
-  const data = (response as { data?: unknown }).data ?? response;
+  const data = unwrap(response);
   
   if (!data || typeof data !== "object") return null;
   
@@ -514,4 +514,24 @@ export function safeDisplay<T>(value: T | undefined | null, placeholder = "—")
     return placeholder;
   }
   return String(value);
+}
+
+/**
+ * Unwrap a proxy response in the shape `{ ok: true, data: ... }` or `{ ok: false, ... }`.
+ * If the wrapper isn't present, returns the input as-is.
+ *
+ * Must be defensive: never throws.
+ */
+function unwrap<T = unknown>(x: unknown): T {
+  try {
+    if (!x || typeof x !== "object") return x as T;
+    if (!("ok" in x)) return x as T;
+    const obj = x as { ok?: unknown; data?: unknown };
+    if (obj.ok === true && "data" in obj) {
+      return obj.data as T;
+    }
+    return x as T;
+  } catch {
+    return x as T;
+  }
 }

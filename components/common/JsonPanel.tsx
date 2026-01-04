@@ -15,6 +15,9 @@ interface JsonPanelProps {
 
 /**
  * Collapsible JSON viewer with copy functionality.
+ *
+ * IMPORTANT: Must never crash rendering. Some RPC payloads may contain values
+ * that `JSON.stringify` cannot handle (e.g. BigInt).
  */
 export function JsonPanel({ 
   data, 
@@ -24,7 +27,7 @@ export function JsonPanel({
 }: JsonPanelProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   
-  const jsonString = JSON.stringify(data, null, 2);
+  const jsonString = safeStringify(data, 2);
   
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden">
@@ -60,4 +63,21 @@ export function JsonPanel({
       )}
     </div>
   );
+}
+
+function safeStringify(value: unknown, space = 2): string {
+  try {
+    return JSON.stringify(
+      value,
+      (_key, v) => (typeof v === "bigint" ? v.toString() : v),
+      space,
+    );
+  } catch {
+    try {
+      // Fall back to a shallow string tag; still must not throw.
+      return `\"[unserializable: ${Object.prototype.toString.call(value)}]\"`;
+    } catch {
+      return "\"[unserializable]\"";
+    }
+  }
 }
