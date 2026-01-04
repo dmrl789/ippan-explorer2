@@ -23,6 +23,7 @@ interface GatewayStatus {
   consensusRound?: number;
   validatorCount?: number;
   validatorIds?: string[];
+  validatorCountSource?: ValidatorSource;
   uptimeSeconds?: number;
   mempoolSize?: number;
   rpcBase?: string;
@@ -30,7 +31,7 @@ interface GatewayStatus {
   consecutiveFailures?: number;
 }
 
-type ValidatorSource = "from_validator_ids" | "from_validators_object" | "unknown";
+type ValidatorSource = "from_validator_count" | "from_validator_ids" | "from_validators_object" | "unknown";
 
 async function fetchGatewayStatus(): Promise<GatewayStatus> {
   try {
@@ -66,7 +67,27 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
     }
 
     // Extract data from the DevNet status schema (status_schema_version: 2)
-    const validatorIds = data.consensus?.validator_ids ?? [];
+    const validatorIds = Array.isArray(data.consensus?.validator_ids) ? data.consensus.validator_ids : [];
+    const explicitValidatorCount =
+      typeof data.validator_count === "number" ? data.validator_count : undefined;
+    const validatorsObjectCount =
+      data.consensus?.validators && typeof data.consensus.validators === "object"
+        ? Object.keys(data.consensus.validators).length
+        : undefined;
+
+    const validatorCountSource: ValidatorSource =
+      explicitValidatorCount !== undefined
+        ? "from_validator_count"
+        : validatorIds.length > 0
+          ? "from_validator_ids"
+          : validatorsObjectCount !== undefined
+            ? "from_validators_object"
+            : "unknown";
+
+    const validatorCount =
+      explicitValidatorCount ??
+      (validatorIds.length > 0 ? validatorIds.length : undefined) ??
+      validatorsObjectCount;
 
     return {
       ok: true,
@@ -76,8 +97,9 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
       networkActive: data.network_active === true,
       peerCount: typeof data.peer_count === "number" ? data.peer_count : undefined,
       consensusRound: typeof data.consensus?.round === "number" ? data.consensus.round : undefined,
-      validatorCount: validatorIds.length,
+      validatorCount,
       validatorIds: validatorIds,
+      validatorCountSource,
       uptimeSeconds: typeof data.uptime_seconds === "number" ? data.uptime_seconds : undefined,
       mempoolSize: typeof data.mempool_size === "number" ? data.mempool_size : undefined,
       rpcBase: json.rpc_base,
@@ -115,6 +137,8 @@ function getValidatorSource(validatorIds?: string[]): ValidatorSource {
 
 function getValidatorSourceLabel(source: ValidatorSource): string {
   switch (source) {
+    case "from_validator_count":
+      return "from /status.validator_count";
     case "from_validator_ids":
       return "from /status.consensus.validator_ids";
     case "from_validators_object":
@@ -151,7 +175,7 @@ export function DevnetStatus() {
     uniqueValidatorIds.size === 1 && 
     validatorIds.length > 0;
   
-  const validatorSource = getValidatorSource(validatorIds);
+  const validatorSource = status.validatorCountSource ?? getValidatorSource(validatorIds);
   const hasIdentityWarning = hasDuplicateValidatorIds || peerValidatorMismatch;
 
   return (
