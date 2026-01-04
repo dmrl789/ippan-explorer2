@@ -46,11 +46,9 @@ export default async function DashboardPage() {
   
   // Detect potential issues
   const uniqueValidatorIds = new Set(validatorIds);
-  const hasDuplicateValidatorIds = uniqueValidatorIds.size < validatorIds.length;
-  const peerValidatorMismatch = status?.peer_count !== undefined && 
-    status.peer_count > 1 && 
-    uniqueValidatorIds.size === 1 && 
-    validatorIds.length > 0;
+  const identityCount = uniqueValidatorIds.size;
+  const hasDuplicateValidatorIds = uniqueValidatorIds.size < validatorIds.length && validatorIds.length > 0;
+  const hasIdentityUndercount = validatorCount > 1 && validatorIds.length > 0 && identityCount === 1;
 
   return (
     <div className="space-y-6">
@@ -78,7 +76,7 @@ export default async function DashboardPage() {
       </Card>
 
       {/* Validator Identity Warning Banner */}
-      {devnetOk && (hasDuplicateValidatorIds || peerValidatorMismatch) && (
+      {devnetOk && (hasDuplicateValidatorIds || hasIdentityUndercount) && (
         <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-amber-300 font-medium text-sm">⚠️ Validator Identity Warning</span>
@@ -90,10 +88,10 @@ export default async function DashboardPage() {
               but only {uniqueValidatorIds.size} unique ID{uniqueValidatorIds.size === 1 ? "" : "s"}. 
               This may indicate nodes sharing the same identity key.
             </p>
-          ) : peerValidatorMismatch ? (
+          ) : hasIdentityUndercount ? (
             <p className="text-sm text-slate-300">
-              <strong>Peer/validator count mismatch:</strong> Gateway sees {status?.peer_count} peers but only {uniqueValidatorIds.size} validator identity. 
-              This may indicate DLC config issues or duplicate identity keys.
+              <strong>Validator identity undercount:</strong> Gateway reports {validatorCount} validators but only {identityCount} validator identity is exposed in{" "}
+              <code className="bg-slate-900/60 px-1 rounded">/status.consensus.validator_ids</code>. This is usually a status field limitation (not necessarily a network fault).
             </p>
           ) : null}
           <div className="mt-2">
@@ -228,7 +226,7 @@ export default async function DashboardPage() {
             source={statusSource}
             subtitle="Operator + AI"
             value={devnetOk ? `${validatorCount} validators` : "—"}
-            warn={hasDuplicateValidatorIds || peerValidatorMismatch}
+              warn={hasDuplicateValidatorIds || hasIdentityUndercount}
           />
         </div>
       </Card>
@@ -256,12 +254,12 @@ export default async function DashboardPage() {
                 <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
               </div>
               <ValidatorSourceBadge source={validatorSource} />
-              {(hasDuplicateValidatorIds || peerValidatorMismatch) && (
+              {(hasDuplicateValidatorIds || hasIdentityUndercount) && (
                 <div className="mt-2 rounded border border-amber-900/50 bg-amber-950/20 px-2 py-1.5">
                   <span className="text-[10px] text-amber-300">
                     {hasDuplicateValidatorIds 
                       ? "⚠️ Duplicate validator IDs detected" 
-                      : "⚠️ Peer/validator mismatch"}
+                      : "⚠️ Validator identity undercount"}
                   </span>
                 </div>
               )}
@@ -359,7 +357,7 @@ export default async function DashboardPage() {
           headerSlot={
             <div className="flex items-center gap-2">
               <SourceBadge source={statusSource} />
-              {(hasDuplicateValidatorIds || peerValidatorMismatch) && (
+              {(hasDuplicateValidatorIds || hasIdentityUndercount) && (
                 <span className="rounded border border-amber-700/50 bg-amber-900/30 px-1.5 py-0.5 text-[10px] text-amber-300">
                   ⚠️ identity issue
                 </span>

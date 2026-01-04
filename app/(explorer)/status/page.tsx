@@ -168,7 +168,7 @@ export default async function StatusPage() {
           <ValidatorIdentityPanel 
             validatorIds={validatorIds}
             selfId={status.consensus.self_id}
-            peerCount={peerCount}
+            reportedValidatorCount={validatorCount}
           />
         ) : (
           <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
