@@ -170,7 +170,14 @@ export default async function TransactionDetailPage({ params }: TransactionPageP
           )}
           
           {tx.included?.round_id !== undefined && (
-            <Detail label="Round" value={String(tx.included.round_id)} />
+            <Detail
+              label="Round"
+              value={
+                <Link href={`/round/${String(tx.included.round_id)}`} className="text-emerald-300 hover:underline">
+                  #{String(tx.included.round_id)}
+                </Link>
+              }
+            />
           )}
           
           {tx.rejected_reason && (
