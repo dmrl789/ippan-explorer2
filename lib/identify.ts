@@ -32,26 +32,7 @@ export function routeForQuery(query: string): string {
   const value = query.trim();
   if (!value) return "/";
 
-  const hashTimerCandidate = normalizeHashTimerInput(value);
-  if (hashTimerCandidate) {
-    return `/hashtimers/${hashTimerCandidate}`;
-  }
-
-  if (isTxHash(value)) {
-    return `/tx/${value}`;
-  }
-
-  if (isBlockHeight(value)) {
-    return `/blocks/${value}`;
-  }
-
-  if (isHandle(value)) {
-    return `/handles?query=${encodeURIComponent(value)}`;
-  }
-
-  if (isAddress(value)) {
-    return `/accounts/${value}`;
-  }
-
-  return `/accounts/${value}`;
+  // Keep this helper lightweight: always route through the server-side resolver so we can disambiguate
+  // tx vs block vs hashtimer hashes without leaking CORS / mixed-content complexity to the browser.
+  return `/search?q=${encodeURIComponent(value)}`;
 }

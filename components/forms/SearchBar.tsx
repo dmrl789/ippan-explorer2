@@ -3,7 +3,6 @@
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { routeForQuery } from "@/lib/identify";
 
 export default function SearchBar() {
   const router = useRouter();
@@ -14,10 +13,7 @@ export default function SearchBar() {
     const value = query.trim();
     if (!value) return;
 
-    const destination = routeForQuery(value);
-    if (destination && destination !== "/") {
-      router.push(destination as Route);
-    }
+    router.push((`/search?q=${encodeURIComponent(value)}` as Route));
   };
 
   return (
