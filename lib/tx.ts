@@ -1,32 +1,87 @@
-import type { Transaction } from "@/types/rpc";
 import { safeJsonFetchWithStatus } from "@/lib/rpc";
+import { 
+  normalizeTxRecent, 
+  normalizeTxDetail, 
+  type TxRecentItem, 
+  type TxDetail,
+  type TxStatus 
+} from "@/lib/normalize";
 
-function normalizeTx(record: any, fallbackHash: string): Transaction {
-  return {
-    hash: typeof record?.hash === "string" ? record.hash : fallbackHash,
-    from: typeof record?.from === "string" ? record.from : "",
-    to: typeof record?.to === "string" ? record.to : "",
-    amount: typeof record?.amount === "number" ? record.amount : 0,
-    amountAtomic: typeof record?.amountAtomic === "string" ? record.amountAtomic : typeof record?.amount_atomic === "string" ? record.amount_atomic : "0",
-    fee: typeof record?.fee === "number" ? record.fee : 0,
-    timestamp: typeof record?.timestamp === "string" ? record.timestamp : new Date().toISOString(),
-    hashTimer: typeof record?.hashTimer === "string" ? record.hashTimer : typeof record?.hash_timer_id === "string" ? record.hash_timer_id : "",
-    type: typeof record?.type === "string" ? record.type : "tx",
-    status: typeof record?.status === "string" ? record.status : "unknown",
-    blockId: typeof record?.blockId === "string" ? record.blockId : typeof record?.block_id === "string" ? record.block_id : undefined,
-    ippan_time_us: typeof record?.ippan_time_us === "string" ? record.ippan_time_us : undefined,
-    ippan_time_ms: typeof record?.ippan_time_ms === "number" ? record.ippan_time_ms : undefined
+export type { TxRecentItem, TxDetail, TxStatus } from "@/lib/normalize";
+
+export async function fetchRecentTransactions(
+  limit: number = 50
+): Promise<
+  | { ok: true; source: "live"; transactions: TxRecentItem[]; meta?: Record<string, unknown> }
+  | { ok: false; source: "error"; error: string; errorCode?: string; transactions: TxRecentItem[] }
+> {
+  const { status, data: payload } = await safeJsonFetchWithStatus<unknown>(
+    `/tx/recent?limit=${Math.min(limit, 200)}`
+  );
+  
+  // Handle network/connection errors
+  if (status === null) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable",
+      transactions: []
+    };
+  }
+  
+  // 404 means endpoint not implemented
+  if (status === 404) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Transaction list endpoint not available on this DevNet (404).",
+      errorCode: "endpoint_not_available",
+      transactions: []
+    };
+  }
+  
+  if (!payload) {
+    return {
+      ok: false,
+      source: "error",
+      error: `Unexpected error fetching transactions (HTTP ${status})`,
+      errorCode: "unknown_error",
+      transactions: []
+    };
+  }
+
+  // Normalize the response
+  const transactions = normalizeTxRecent(payload);
+  
+  // Extract meta if available
+  const meta = (payload as Record<string, unknown>)?.meta as Record<string, unknown> | undefined;
+  
+  return { 
+    ok: true, 
+    source: "live", 
+    transactions,
+    meta
   };
 }
 
 export async function fetchTransactionDetail(
   hash: string
 ): Promise<
-  | { ok: true; source: "live"; tx: Transaction }
+  | { ok: true; source: "live"; tx: TxDetail }
   | { ok: true; source: "live"; tx: null; notFoundReason?: string }
   | { ok: false; source: "error"; error: string; errorCode?: string }
 > {
-  const { status, data } = await safeJsonFetchWithStatus<any>(`/tx/${encodeURIComponent(hash)}`);
+  const { status, data } = await safeJsonFetchWithStatus<unknown>(`/tx/${encodeURIComponent(hash)}`);
+  
+  if (status === null) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable"
+    };
+  }
   
   if (status === 404) {
     return {
@@ -38,17 +93,77 @@ export async function fetchTransactionDetail(
   }
   
   if (!data) {
-    const errorCode = status === null ? "gateway_unreachable" : "unknown_error";
     return {
       ok: false,
       source: "error",
-      error: status === null
-        ? "Gateway RPC unavailable (connection failed)"
-        : `Unexpected error fetching transaction (HTTP ${status})`,
-      errorCode
+      error: `Unexpected error fetching transaction (HTTP ${status})`,
+      errorCode: "unknown_error"
     };
   }
   
-  return { ok: true, source: "live", tx: normalizeTx(data, hash) };
+  const tx = normalizeTxDetail(data);
+  
+  if (!tx) {
+    return {
+      ok: true,
+      source: "live",
+      tx: null,
+      notFoundReason: "Transaction data could not be parsed. The RPC response format may have changed."
+    };
+  }
+  
+  return { ok: true, source: "live", tx };
 }
 
+export async function fetchTransactionStatus(
+  hash: string
+): Promise<
+  | { ok: true; source: "live"; status: TxStatus; raw?: unknown }
+  | { ok: true; source: "live"; status: null; notFoundReason?: string }
+  | { ok: false; source: "error"; error: string; errorCode?: string }
+> {
+  const { status: httpStatus, data } = await safeJsonFetchWithStatus<unknown>(
+    `/tx/status/${encodeURIComponent(hash)}`
+  );
+  
+  if (httpStatus === null) {
+    return {
+      ok: false,
+      source: "error",
+      error: "Gateway RPC unavailable (connection failed)",
+      errorCode: "gateway_unreachable"
+    };
+  }
+  
+  if (httpStatus === 404) {
+    return {
+      ok: true,
+      source: "live",
+      status: null,
+      notFoundReason: "Transaction status not found."
+    };
+  }
+  
+  if (!data) {
+    return {
+      ok: false,
+      source: "error",
+      error: `Unexpected error fetching transaction status (HTTP ${httpStatus})`,
+      errorCode: "unknown_error"
+    };
+  }
+  
+  // Extract status from response
+  const response = data as Record<string, unknown>;
+  const statusStr = (response.status_v2 as string) ?? (response.status as string) ?? "unknown";
+  
+  // Use the normalize helper
+  const tx = normalizeTxDetail(data);
+  
+  return { 
+    ok: true, 
+    source: "live", 
+    status: tx?.status ?? "unknown",
+    raw: data
+  };
+}
