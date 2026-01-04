@@ -60,18 +60,20 @@ export function getEnvRpcBaseUrl(): string | undefined {
 
 /**
  * Get the effective RPC base URL for the current environment.
- * - Browser: Returns "" (empty string) to use same-origin /api/rpc/* proxy
+ * - Browser: Returns "/api/rpc" to use same-origin proxy (HTTPS-safe)
  * - Server: Returns the direct RPC base URL
  * 
  * This automatically handles mixed content issues by using the proxy
- * when running in the browser.
+ * when running in the browser. The browser NEVER makes direct HTTP
+ * calls to the RPC gateway.
  */
 export function getEffectiveRpcBase(): string {
-  // In browser, use the proxy to avoid mixed content (HTTPS -> HTTP blocked)
+  // In browser, ALWAYS use the proxy to avoid mixed content (HTTPS -> HTTP blocked)
+  // This is critical for Vercel deployments where the site is HTTPS but gateway is HTTP
   if (isBrowser()) {
     return "/api/rpc";
   }
-  // On server, use direct RPC base
+  // On server, use direct RPC base (server-side can make HTTP requests)
   return IPPAN_RPC_BASE;
 }
 

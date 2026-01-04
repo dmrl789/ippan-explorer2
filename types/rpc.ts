@@ -5,6 +5,17 @@
  */
 export type RpcSource = "live" | "error";
 
+// Re-export normalized types for new code
+// (Old types below are kept for backwards compatibility)
+export type {
+  TxStatus,
+  TxRecentItem,
+  TxDetail,
+  BlockSummary as NormalizedBlockSummary,
+  BlockDetail as NormalizedBlockDetail,
+  RoundDetail,
+} from "@/lib/normalize";
+
 export interface AiStatus {
   modelHash: string;
   usingStub: boolean;

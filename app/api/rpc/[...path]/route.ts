@@ -30,6 +30,8 @@ const ALLOWED_PATH_PREFIXES = [
   "/blocks",
   "/block",
   "/tx",
+  "/round",
+  "/rounds",
   "/accounts",
   "/account",
   "/handles",

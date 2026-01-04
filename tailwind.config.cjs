@@ -11,7 +11,10 @@ module.exports = {
         brand: {
           DEFAULT: "#1f2937"
         }
-      }
+      },
+      screens: {
+        'xs': '480px',
+      },
     }
   },
   plugins: []

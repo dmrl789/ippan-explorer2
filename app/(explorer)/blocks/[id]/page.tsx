@@ -1,22 +1,25 @@
 import Link from "next/link";
-import SimpleTable from "@/components/tables/SimpleTable";
-import JsonViewer from "@/components/common/JsonViewer";
+import { JsonPanel } from "@/components/common/JsonPanel";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { RpcErrorBanner } from "@/components/common/RpcErrorBanner";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { HashTimerValue } from "@/components/common/HashTimerValue";
+import { HashCell } from "@/components/common/HashCell";
+import { CopyButton } from "@/components/common/CopyButton";
+import { ResponsiveTable } from "@/components/common/ResponsiveTable";
 import { fetchBlockDetail } from "@/lib/blocks";
-import { formatAmount, shortenHash } from "@/lib/format";
-import { formatMs, toMsFromUs } from "@/lib/ippanTime";
+import { shortenHash } from "@/lib/format";
+import { formatMs } from "@/lib/ippanTime";
 import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
 interface BlockDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function BlockDetailPage({ params }: BlockDetailPageProps) {
-  const result = await fetchBlockDetail(params.id);
+  const { id } = await params;
+  const result = await fetchBlockDetail(id);
   
   // Handle RPC errors
   if (!result.ok) {
@@ -24,15 +27,16 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
       <div className="space-y-6">
         <PageHeader 
           title="Block" 
-          description={`#${params.id}`} 
-          actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} 
+          description={shortenHash(id, 10)} 
+          actions={<BackLink />} 
         />
         <Card title="DevNet RPC Error" headerSlot={<SourceBadge source="error" />}>
           <RpcErrorBanner
             error={{
               error: result.error,
+              errorCode: "errorCode" in result ? result.errorCode : undefined,
               rpcBase: IPPAN_RPC_BASE,
-              path: `/blocks/${params.id}`,
+              path: `/block/${id}`,
             }}
             context="Block Detail"
             showDebugLink={true}
@@ -44,97 +48,181 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
   
   // Handle block not found (404 from DevNet)
   if (!result.block) {
+    const notFoundReason = "notFoundReason" in result && result.notFoundReason
+      ? result.notFoundReason
+      : "Block not found on this DevNet.";
+    
     return (
       <div className="space-y-6">
         <PageHeader 
           title="Block Not Found" 
-          description={`#${params.id}`} 
-          actions={<Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">← Back to blocks</Link>} 
+          description={shortenHash(id, 10)} 
+          actions={<BackLink />} 
         />
         <Card title="Block Not Found" headerSlot={<SourceBadge source="live" />}>
           <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-4">
-            <p className="text-sm text-amber-200/80">
-              Block #{params.id} was not found on this DevNet.
-            </p>
-            <p className="mt-2 text-xs text-slate-500">
-              This could mean the block ID is incorrect, or the block hasn&apos;t been created yet.
-            </p>
+            <p className="text-sm text-amber-200/80">{notFoundReason}</p>
+            <div className="mt-3 text-xs text-slate-500">
+              <p className="font-mono break-all">ID: {id}</p>
+              <p className="mt-1">This could mean:</p>
+              <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                <li>The block hash/ID is incorrect</li>
+                <li>The block hasn&apos;t been created yet</li>
+                <li>The block was on a different fork</li>
+              </ul>
+            </div>
           </div>
         </Card>
       </div>
     );
   }
-  const resolvedBlock = result.block;
-  const blockIppanMs =
-    resolvedBlock.ippan_time_ms ??
-    (resolvedBlock.ippan_time_us
-      ? toMsFromUs(resolvedBlock.ippan_time_us)
-      : new Date(resolvedBlock.timestamp).getTime());
+
+  const block = result.block;
+  const blockIppanMs = block.ippan_time_ms ?? (block.timestamp ? new Date(block.timestamp).getTime() : Date.now());
   const blockIso = formatMs(blockIppanMs);
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Block #${resolvedBlock.id}`}
-        description={`Hash ${shortenHash(resolvedBlock.hash)}`}
-        actions={
-          <Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">
-            ← Back to blocks
-          </Link>
+        title="Block"
+        description={
+          <span className="font-mono text-sm break-all">{shortenHash(block.block_hash, 12)}</span>
         }
+        actions={<BackLink />}
       />
 
-      <Card title="Block header" headerSlot={<SourceBadge source={result.source} />}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <div>
-              <p className="text-xs uppercase text-slate-500">IPPAN Time (ms)</p>
-              <p className="text-lg font-semibold text-slate-50">{blockIppanMs.toLocaleString()}</p>
-              <p className="text-xs text-slate-400">UTC {blockIso}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-slate-500">HashTimer</p>
-              <HashTimerValue
-                id={resolvedBlock.hashTimer}
-                linkClassName="font-mono text-sm text-emerald-300 underline-offset-4 hover:underline"
+      {/* Block Header Card */}
+      <Card title="Block Header" headerSlot={<SourceBadge source={result.source} />}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Detail 
+            label="Block Hash"
+            value={
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-sm break-all">{block.block_hash}</span>
+                <CopyButton text={block.block_hash} size="xs" iconOnly />
+              </div>
+            }
+          />
+          
+          <Detail 
+            label="Previous Block"
+            value={
+              block.prev_block_hash ? (
+                <HashCell value={block.prev_block_hash} href={`/blocks/${block.prev_block_hash}`} />
+              ) : (
+                <span className="text-slate-500">—</span>
+              )
+            }
+          />
+
+          <Detail 
+            label="Round ID" 
+            value={block.round_id ?? "—"} 
+          />
+
+          <Detail 
+            label="Transaction Count" 
+            value={
+              <span className="text-emerald-300 font-semibold">
+                {block.tx_count ?? block.tx_ids?.length ?? "—"}
+              </span>
+            } 
+          />
+
+          <Detail label="IPPAN Time (ms)" value={blockIppanMs.toLocaleString()} />
+          <Detail label="UTC" value={blockIso} />
+
+          {block.hashtimer && (
+            <div className="sm:col-span-2">
+              <Detail
+                label="HashTimer"
+                value={
+                  <HashTimerValue
+                    id={block.hashtimer}
+                    linkClassName="font-mono text-sm text-emerald-300 underline-offset-4 hover:underline"
+                  />
+                }
               />
             </div>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-slate-500">Parents</p>
-            <div className="text-sm text-slate-200">
-              {resolvedBlock.parents.map((parent) => (
-                <div key={parent}>{parent}</div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </Card>
 
-      <Card title="Transactions" description={`${resolvedBlock.transactions.length} transactions`}>
-        <SimpleTable
-          data={resolvedBlock.transactions}
-          columns={[
-            {
-              key: "hash",
-              header: "Tx",
-              render: (row) => (
-                <Link href={`/tx/${row.hash}`} className="text-emerald-300">
-                  {shortenHash(row.hash)}
-                </Link>
-              )
-            },
-            { key: "from", header: "From", render: (row) => shortenHash(row.from) },
-            { key: "to", header: "To", render: (row) => shortenHash(row.to) },
-            { key: "amount", header: "Amount", render: (row) => formatAmount(row.amount) },
-            { key: "fee", header: "Fee", render: (row) => `${row.fee} IPN` }
-          ]}
-        />
+      {/* Transactions in Block */}
+      <Card 
+        title="Transactions in Block" 
+        description={`${block.tx_ids?.length ?? 0} transactions`}
+      >
+        {block.tx_ids && block.tx_ids.length > 0 ? (
+          <ResponsiveTable
+            data={block.tx_ids.map((txId, index) => ({ txId, index }))}
+            keyExtractor={(row) => row.txId}
+            columns={[
+              {
+                key: "index",
+                header: "#",
+                mobilePriority: 2,
+                render: (row) => (
+                  <span className="text-slate-500 text-xs">{row.index + 1}</span>
+                ),
+              },
+              {
+                key: "txId",
+                header: "Transaction ID",
+                mobilePriority: 1,
+                render: (row) => (
+                  <Link
+                    href={`/tx/${row.txId}`}
+                    className="text-emerald-300 hover:text-emerald-200 font-mono text-sm"
+                  >
+                    {shortenHash(row.txId, 12)}
+                  </Link>
+                ),
+                renderMobile: (row) => (
+                  <Link
+                    href={`/tx/${row.txId}`}
+                    className="text-emerald-300 hover:text-emerald-200 font-mono text-xs"
+                  >
+                    {shortenHash(row.txId, 8)}
+                  </Link>
+                ),
+              },
+            ]}
+          />
+        ) : (
+          <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-6 text-center">
+            <p className="text-sm text-slate-400">No transactions in this block</p>
+            <p className="mt-1 text-xs text-slate-500">
+              This block may contain only consensus data with no user transactions.
+            </p>
+          </div>
+        )}
       </Card>
 
-      <Card title="Raw block JSON">
-        <JsonViewer data={resolvedBlock} />
-      </Card>
+      {/* Block header details if available */}
+      {block.header && Object.keys(block.header).length > 0 && (
+        <JsonPanel data={block.header} title="Block Header Details" />
+      )}
+
+      {/* Raw Block JSON */}
+      <JsonPanel data={block.raw ?? block} title="Raw Block JSON" />
+    </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link href="/blocks" className="text-sm text-slate-400 hover:text-slate-100">
+      ← Back to blocks
+    </Link>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs uppercase text-slate-500 mb-1">{label}</p>
+      <div className="text-sm text-slate-100">{value}</div>
     </div>
   );
 }

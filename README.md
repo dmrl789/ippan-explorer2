@@ -24,7 +24,7 @@ npm run dev
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `IPPAN_RPC_BASE_URL` | **Server-side only** RPC gateway URL (preferred) | — |
-| `NEXT_PUBLIC_IPPAN_RPC_BASE` | Public RPC gateway URL (client + server) | `http://188.245.97.41:8080` |
+| `NEXT_PUBLIC_IPPAN_RPC_BASE` | Public RPC gateway URL (for display) | `http://188.245.97.41:8080` |
 | `NEXT_PUBLIC_DEMO_MODE` | Enable demo/mock data (default: `false`) | `false` |
 
 ### Vercel Configuration
@@ -34,14 +34,14 @@ npm run dev
 
 ```
 IPPAN_RPC_BASE_URL = http://188.245.97.41:8080
-NEXT_PUBLIC_IPPAN_RPC_BASE = http://188.245.97.41:8080
 NEXT_PUBLIC_DEMO_MODE = false
 ```
 
 **Important Notes:**
+- Only `IPPAN_RPC_BASE_URL` is required - the server-side proxy uses this
+- `NEXT_PUBLIC_IPPAN_RPC_BASE` is optional and used only for display in the UI
 - `NEXT_PUBLIC_DEMO_MODE=false` (default) ensures no mock data is ever displayed
-- If the RPC is not publicly reachable, you must use a reverse proxy or Cloudflare tunnel
-- The Explorer will show clear error messages if the RPC is unreachable
+- All browser RPC calls go through `/api/rpc/*` (no CORS/mixed-content issues)
 
 ### Demo Mode
 
@@ -73,16 +73,30 @@ All RPC calls are proxied through Next.js API routes to:
 
 ### Available API Proxy Routes
 
-| Route | Description |
-|-------|-------------|
-| `GET /api/rpc/status` | Proxy to `/status` |
-| `GET /api/rpc/health` | Proxy to `/health` |
-| `GET /api/rpc/blocks` | Proxy to `/blocks` |
-| `GET /api/rpc/block/[id]` | Proxy to `/blocks/[id]` |
-| `GET /api/rpc/tx/[hash]` | Proxy to `/tx/[hash]` |
-| `GET /api/rpc/account/[hex]` | Proxy to `/accounts/[hex]` |
-| `GET /api/rpc/debug` | Diagnostic bundle (probes all endpoints) |
-| `GET /api/rpc/*` | Catch-all proxy with allowlist (see below) |
+| Route | Description | Fallback |
+|-------|-------------|----------|
+| `GET /api/rpc/status` | Proxy to `/status` | — |
+| `GET /api/rpc/health` | Proxy to `/health` | — |
+| `GET /api/rpc/blocks` | Proxy to `/blocks` | Derives from `/tx/recent` |
+| `GET /api/rpc/block/[id]` | Proxy to `/block/[id]` | Falls back to `/blocks/[id]` |
+| `GET /api/rpc/tx/[hash]` | Proxy to `/tx/[hash]` | — |
+| `GET /api/rpc/tx/recent` | Proxy to `/tx/recent` | — |
+| `GET /api/rpc/tx/status/[hash]` | Proxy to `/tx/status/[hash]` | — |
+| `GET /api/rpc/round/[id]` | Proxy to `/round/[id]` | — |
+| `GET /api/rpc/account/[hex]` | Proxy to `/accounts/[hex]` | — |
+| `GET /api/rpc/debug` | Diagnostic probe matrix | — |
+| `GET /api/rpc/*` | Catch-all proxy with allowlist | — |
+
+### Blocks List Fallback
+
+If the upstream `/blocks` endpoint returns 404 (not implemented), the explorer automatically falls back to:
+
+1. Fetch recent transactions via `/tx/recent?limit=200`
+2. Extract unique `block_hash` from finalized/included transactions
+3. Hydrate each block via `/block/[hash]` (parallel, max 8 concurrent)
+4. Return normalized list sorted by timestamp
+
+This ensures the blocks page works even on DevNet versions without a `/blocks` endpoint.
 
 ### Catch-all RPC Proxy
 
@@ -95,10 +109,11 @@ The `/api/rpc/[...path]` route provides a catch-all proxy for any RPC endpoint. 
 
 Allowed path prefixes:
 - `/status`, `/health`, `/blocks`, `/block`, `/tx`
-- `/accounts`, `/account`, `/handles`, `/handle`
-- `/files`, `/file`, `/ipndht`, `/peers`, `/peer`
-- `/l2`, `/ai`, `/hashtimers`, `/hashtimer`
-- `/debug`, `/consensus`, `/network`, `/metrics`
+- `/round`, `/rounds`, `/accounts`, `/account`
+- `/handles`, `/handle`, `/files`, `/file`
+- `/ipndht`, `/peers`, `/peer`, `/l2`, `/ai`
+- `/hashtimers`, `/hashtimer`, `/debug`
+- `/consensus`, `/network`, `/metrics`
 
 ### Security Note
 
@@ -107,10 +122,12 @@ The proxy allowlist prevents Server-Side Request Forgery (SSRF) by only forwardi
 ### The `/api/rpc/debug` Endpoint
 
 Visit `/api/rpc/debug` to get a one-shot diagnostic bundle that includes:
-- RPC configuration
-- Gateway reachability status
-- Individual endpoint probe results
+- RPC configuration and environment variable status
+- Gateway reachability and latency
+- **Probe matrix**: Status of each endpoint (status, tx_recent, blocks_list, etc.)
 - Node info (if available)
+- Fallback info (which endpoints need fallback)
+- Explorer capabilities summary
 - Troubleshooting steps
 
 This is extremely useful for debugging RPC connectivity issues from Vercel.
@@ -152,8 +169,10 @@ The DevNet consists of 4 validator nodes + tx bot:
 This explorer is wired to the current IPPAN DevNet and never shows mocked data.
 
 - `/` – Dashboard: truthful L1 snapshot + peers + IPNDHT + links to L2.
-- `/blocks` – Latest blocks, plus `/blocks/[id]` for block details + transactions.
-- `/tx/[hash]` – Transaction detail + raw JSON view.
+- `/transactions` – **Recent transactions with status filters** (Mempool/Included/Finalized/Rejected/Pruned), search, and responsive table/card view.
+- `/tx/[hash]` – Transaction detail with **lifecycle timeline** (Submitted → Included → Finalized) + raw JSON view.
+- `/blocks` – Latest blocks with auto-refresh toggle; works even if `/blocks` endpoint is 404 (uses fallback).
+- `/blocks/[id]` – Block details + list of transaction IDs in block.
 - `/accounts` – Landing page (no demo data).
 - `/accounts/[address]` – Account overview (payment history is shown only if your RPC exposes it).
 - `/ipndht` – IPNDHT overview from devnet RPC.
@@ -162,6 +181,27 @@ This explorer is wired to the current IPPAN DevNet and never shows mocked data.
 - `/network` – Peer inventory from `/peers`.
 - `/status` – Operator/cluster view combining `/health`, `/status`, and `/ai/status` (if exposed by your devnet RPC).
 - `/l2` – L2 modules list driven by config + IPNDHT tag footprint (no invented state).
+
+## Mobile & Tablet Support
+
+The explorer is fully responsive with:
+- **Responsive tables**: Tables on desktop, card lists on mobile
+- **Bottom navigation**: Mobile-friendly nav bar on small screens
+- **Compact hashes**: Shortened hashes with copy buttons
+- **Touch-friendly**: Large tap targets, expandable sections
+- **Status indicators**: Gateway connection status in header
+
+## Schema Normalization
+
+The explorer uses a centralized normalization layer (`lib/normalize.ts`) to handle schema drift:
+
+- **Transaction normalization**: Accepts various field names (`tx_id`/`hash`/`tx_hash`), status formats
+- **Block normalization**: Handles nested `header` objects, different field names
+- **Round normalization**: Extracts `round_id`, `included_blocks`, `ordered_tx_ids`
+- **Missing fields**: Show "—" instead of errors
+- **Unknown endpoints**: Show "endpoint not exposed yet" message
+
+This ensures the explorer doesn't break when the RPC schema changes.
 
 ## IPPAN Time & HashTimer
 
@@ -199,8 +239,8 @@ This explorer treats L2 as **surfaces anchored on L1**: it lists L2 modules and 
 
 ## Network + IPNDHT features
 
-- `/api/peers` proxies to `${NEXT_PUBLIC_IPPAN_RPC_BASE}/peers` (no mock fallback).
-- `/api/ipndht` proxies to `${NEXT_PUBLIC_IPPAN_RPC_BASE}/ipndht` (no mock fallback).
+- `/api/peers` proxies to `${IPPAN_RPC_BASE_URL}/peers` (no mock fallback).
+- `/api/ipndht` proxies to `${IPPAN_RPC_BASE_URL}/ipndht` (no mock fallback).
 - `/api/rpc/*` routes provide server-side proxying with consistent error handling.
 - When the RPC is down/unreachable, the UI shows a clear devnet error state instead of fake data.
 
@@ -208,10 +248,10 @@ This explorer treats L2 as **surfaces anchored on L1**: it lists L2 modules and 
 
 ### RPC Connection Issues
 
-1. **Visit `/api/rpc/debug`** to see a complete diagnostic report
+1. **Visit `/api/rpc/debug`** to see a complete diagnostic report with probe matrix
 2. Check if `IPPAN_RPC_BASE_URL` is set correctly in Vercel
 3. Verify the RPC gateway is publicly accessible (no firewall blocking)
-4. Look for CORS or mixed-content errors in browser console
+4. Check the gateway status indicator in the header
 
 ### "Mock data blocked" Error
 
@@ -219,15 +259,23 @@ If you see this error, it means the code tried to use mock data but `NEXT_PUBLIC
 - This is intentional - production should never show mock data
 - Fix the underlying RPC issue instead of enabling demo mode
 
-### Blocks/Transactions Not Loading
+### Blocks Not Loading
 
-If `/status` works but blocks/tx fail:
-- The node may not expose `/blocks` or `/tx` endpoints yet (404 expected)
-- This is a DevNet limitation, not an Explorer bug
-- The UI will show a clear "endpoint not available" message
+If `/status` works but blocks fail:
+- Check if the blocks list fallback is working (look for "Fallback Mode Active" warning)
+- The fallback requires `/tx/recent` to be available
+- If both fail, the node may not expose transaction or block endpoints yet
+
+### Transactions Not Loading
+
+If transactions fail to load:
+- Check `/api/rpc/debug` for `tx_recent` probe status
+- Verify the node exposes `/tx/recent` endpoint
 
 ## Tech stack
 
 - Next.js App Router + React Server Components
 - Tailwind CSS for styling
-- TypeScript-first components and RPC types in `types/rpc.ts`
+- TypeScript-first components and RPC types
+- Centralized schema normalization (`lib/normalize.ts`)
+- Responsive design with mobile bottom navigation
