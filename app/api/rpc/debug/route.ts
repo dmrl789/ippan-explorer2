@@ -245,8 +245,7 @@ export async function GET() {
                 ? (((statusData.consensus as Record<string, unknown>)?.validator_ids as unknown[])?.length ?? 0)
                 : typeof (statusData.consensus as any)?.validators === "object" && (statusData.consensus as any)?.validators
                   ? Object.keys((statusData.consensus as any).validators).length
-                  : 0
-            : undefined,
+                  : 0,
         }
       : null,
 
