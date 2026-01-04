@@ -1,4 +1,4 @@
-function normalizeRpcBase(rawBase?: string): string | undefined {
+export function normalizeRpcBase(rawBase?: string): string | undefined {
   if (!rawBase) return undefined;
   const trimmed = rawBase.trim();
   if (!trimmed) return undefined;
@@ -18,14 +18,15 @@ function isBrowser(): boolean {
 function getRpcBaseFromEnv(): string | undefined {
   const rawBase =
     process.env.NEXT_PUBLIC_IPPAN_RPC_BASE ??
-    process.env.NEXT_PUBLIC_NODE_RPC ??
     process.env.NEXT_PUBLIC_IPPAN_RPC_URL ??
+    process.env.IPPAN_RPC_URL ??
+    // Legacy fallbacks
+    process.env.NEXT_PUBLIC_NODE_RPC ??
     process.env.NEXT_PUBLIC_IPPAN_RPC ??
     process.env.NEXT_PUBLIC_IPPAN_RPC_FALLBACK ??
     process.env.NEXT_PUBLIC_RPC_URL ??
     process.env.NEXT_PUBLIC_EXPLORER_API ??
     process.env.VITE_NODE_RPC ??
-    process.env.IPPAN_RPC_URL ??
     process.env.IPPAN_RPC_BASE;
 
   return normalizeRpcBase(rawBase);
