@@ -238,8 +238,14 @@ export async function GET() {
           peer_count: statusData.peer_count,
           mempool_size: statusData.mempool_size,
           consensus_round: (statusData.consensus as Record<string, unknown>)?.round,
-          validator_count: Array.isArray((statusData.consensus as Record<string, unknown>)?.validator_ids)
-            ? ((statusData.consensus as Record<string, unknown>)?.validator_ids as unknown[]).length
+          validator_count:
+            typeof (statusData as any).validator_count === "number"
+              ? (statusData as any).validator_count
+              : Array.isArray((statusData.consensus as Record<string, unknown>)?.validator_ids)
+                ? (((statusData.consensus as Record<string, unknown>)?.validator_ids as unknown[])?.length ?? 0)
+                : typeof (statusData.consensus as any)?.validators === "object" && (statusData.consensus as any)?.validators
+                  ? Object.keys((statusData.consensus as any).validators).length
+                  : 0
             : undefined,
         }
       : null,
