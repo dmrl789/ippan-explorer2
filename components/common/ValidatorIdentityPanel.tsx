@@ -15,11 +15,11 @@ interface ValidatorIdentity {
 interface Props {
   validatorIds: string[];
   selfId?: string;
-  peerCount?: number;
+  reportedValidatorCount?: number;
   className?: string;
 }
 
-export function ValidatorIdentityPanel({ validatorIds, selfId, peerCount, className = "" }: Props) {
+export function ValidatorIdentityPanel({ validatorIds, selfId, reportedValidatorCount, className = "" }: Props) {
   // Count occurrences and detect duplicates
   const idCounts = new Map<string, number>();
   for (const id of validatorIds) {
@@ -30,8 +30,12 @@ export function ValidatorIdentityPanel({ validatorIds, selfId, peerCount, classN
   const totalCount = validatorIds.length;
   const hasDuplicates = uniqueCount < totalCount;
 
-  // Check for suspicious scenarios
-  const peerValidatorMismatch = peerCount !== undefined && peerCount > 0 && uniqueCount === 1 && peerCount > 1;
+  // Check for suspicious scenarios (do NOT compare peers vs validators; peers can be observers/bots)
+  const identityUndercount =
+    typeof reportedValidatorCount === "number" &&
+    reportedValidatorCount > 1 &&
+    totalCount > 0 &&
+    uniqueCount === 1;
   const noValidatorIds = validatorIds.length === 0;
 
   // Build validator list with metadata
@@ -62,11 +66,16 @@ export function ValidatorIdentityPanel({ validatorIds, selfId, peerCount, classN
               ({totalCount} total with duplicates)
             </span>
           )}
+          {typeof reportedValidatorCount === "number" && reportedValidatorCount > 0 && (
+            <span className="text-xs text-slate-500">
+              · gateway reports {reportedValidatorCount} validators
+            </span>
+          )}
         </div>
         {hasDuplicates && (
           <StatusPill status="error" />
         )}
-        {peerValidatorMismatch && !hasDuplicates && (
+        {identityUndercount && !hasDuplicates && (
           <StatusPill status="warn" />
         )}
       </div>
@@ -91,22 +100,19 @@ export function ValidatorIdentityPanel({ validatorIds, selfId, peerCount, classN
         </div>
       )}
 
-      {peerValidatorMismatch && !hasDuplicates && (
+      {identityUndercount && !hasDuplicates && (
         <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-amber-300 font-medium">⚠️ Peer/Validator Count Mismatch</span>
+            <span className="text-amber-300 font-medium">⚠️ Validator Identity Undercount</span>
           </div>
           <p className="text-sm text-slate-300">
-            Gateway sees <strong>{peerCount} peers</strong> but only <strong>{uniqueCount} validator identity</strong>.
-            This may indicate:
+            Gateway reports <strong>{reportedValidatorCount} validators</strong> but only{" "}
+            <strong>{uniqueCount} validator identity</strong> is exposed in{" "}
+            <code className="bg-slate-900/60 px-1 rounded">/status.consensus.validator_ids</code>.
           </p>
-          <ul className="mt-2 text-sm text-slate-400 list-disc list-inside space-y-1">
-            <li>DLC config file lists only 1 validator</li>
-            <li>Validator identity propagation incomplete</li>
-            <li>Nodes sharing the same validator key (duplicate identity)</li>
-          </ul>
-          <p className="mt-2 text-xs text-slate-500">
-            Check <code className="bg-slate-900/60 px-1 rounded">IPPAN_DLC_CONFIG_PATH</code> and <code className="bg-slate-900/60 px-1 rounded">CONSENSUS_VALIDATOR_IDS</code> on all nodes.
+          <p className="mt-2 text-sm text-slate-400">
+            This is usually a <strong>status field limitation</strong> (not necessarily a network fault). If you expect
+            full identities to be visible, ensure the node/gateway exposes an explicit validator identity list.
           </p>
         </div>
       )}

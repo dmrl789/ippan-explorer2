@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { getValidatorSource, type ValidatorSource } from "@/components/common/ValidatorSourceBadge";
 
 /**
  * DevNet status derived from the single canonical RPC gateway.
@@ -30,8 +31,6 @@ interface GatewayStatus {
   lastSuccessTs?: number;
   consecutiveFailures?: number;
 }
-
-type ValidatorSource = "from_validator_count" | "from_validator_ids" | "from_validators_object" | "unknown";
 
 async function fetchGatewayStatus(): Promise<GatewayStatus> {
   try {
@@ -68,26 +67,7 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
 
     // Extract data from the DevNet status schema (status_schema_version: 2)
     const validatorIds = Array.isArray(data.consensus?.validator_ids) ? data.consensus.validator_ids : [];
-    const explicitValidatorCount =
-      typeof data.validator_count === "number" ? data.validator_count : undefined;
-    const validatorsObjectCount =
-      data.consensus?.validators && typeof data.consensus.validators === "object"
-        ? Object.keys(data.consensus.validators).length
-        : undefined;
-
-    const validatorCountSource: ValidatorSource =
-      explicitValidatorCount !== undefined
-        ? "from_validator_count"
-        : validatorIds.length > 0
-          ? "from_validator_ids"
-          : validatorsObjectCount !== undefined
-            ? "from_validators_object"
-            : "unknown";
-
-    const validatorCount =
-      explicitValidatorCount ??
-      (validatorIds.length > 0 ? validatorIds.length : undefined) ??
-      validatorsObjectCount;
+    const { count: validatorCount, source: validatorCountSource } = getValidatorSource(data);
 
     return {
       ok: true,
@@ -128,23 +108,20 @@ function formatUptime(seconds?: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-function getValidatorSource(validatorIds?: string[]): ValidatorSource {
-  if (validatorIds && validatorIds.length > 0) {
-    return "from_validator_ids";
-  }
-  return "unknown";
-}
-
 function getValidatorSourceLabel(source: ValidatorSource): string {
   switch (source) {
     case "from_validator_count":
-      return "from /status.validator_count";
-    case "from_validator_ids":
-      return "from /status.consensus.validator_ids";
+      return "src: validator_count";
+    case "from_status_validators":
+      return "src: status.validators";
     case "from_validators_object":
-      return "from /status.consensus.validators";
+      return "src: consensus.validators";
+    case "from_validator_metrics":
+      return "src: validator_* metrics/stats";
+    case "from_validator_ids":
+      return "src: consensus.validator_ids (fallback)";
     default:
-      return "unknown (missing fields)";
+      return "src: unknown";
   }
 }
 
@@ -170,13 +147,12 @@ export function DevnetStatus() {
   const validatorIds = status.validatorIds ?? [];
   const uniqueValidatorIds = new Set(validatorIds);
   const hasDuplicateValidatorIds = uniqueValidatorIds.size < validatorIds.length && validatorIds.length > 0;
-  const peerValidatorMismatch = status.peerCount !== undefined && 
-    status.peerCount > 1 && 
-    uniqueValidatorIds.size === 1 && 
-    validatorIds.length > 0;
+  const identityCount = uniqueValidatorIds.size;
+  const validatorCount = status.validatorCount ?? 0;
+  const hasIdentityUndercount = validatorCount > 1 && identityCount === 1 && validatorIds.length > 0;
   
-  const validatorSource = status.validatorCountSource ?? getValidatorSource(validatorIds);
-  const hasIdentityWarning = hasDuplicateValidatorIds || peerValidatorMismatch;
+  const validatorSource = status.validatorCountSource ?? "unknown";
+  const hasIdentityWarning = hasDuplicateValidatorIds || hasIdentityUndercount;
 
   return (
     <div className="space-y-3 text-xs">
@@ -216,8 +192,8 @@ export function DevnetStatus() {
               tooltip={
                 hasIdentityWarning 
                   ? hasDuplicateValidatorIds 
-                    ? "Duplicate validator IDs detected! Multiple nodes may share the same identity key."
-                    : `Peer/validator mismatch: ${status.peerCount} peers but only ${uniqueValidatorIds.size} validator ID`
+                    ? "Duplicate validator IDs detected in /status.consensus.validator_ids (possible shared identity keys)."
+                    : `Gateway reports ${validatorCount} validators but only ${identityCount} validator identity is exposed in /status.consensus.validator_ids.`
                   : undefined
               }
             />
@@ -230,17 +206,12 @@ export function DevnetStatus() {
             />
           </div>
           
-          {/* Validator source indicator */}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[10px] text-slate-500">Validator count source:</span>
-            <span className={`rounded border px-1.5 py-0.5 text-[10px] ${
-              validatorSource === "unknown" 
-                ? "border-amber-700/50 bg-amber-900/30 text-amber-300"
-                : "border-blue-700/50 bg-blue-900/30 text-blue-300"
-            }`}>
+          {/* Tiny source label in dev mode only */}
+          {process.env.NODE_ENV !== "production" && (
+            <div className="mt-2 text-[10px] text-slate-500">
               {getValidatorSourceLabel(validatorSource)}
-            </span>
-          </div>
+            </div>
+          )}
 
           {/* Identity warning */}
           {hasIdentityWarning && (
@@ -250,13 +221,13 @@ export function DevnetStatus() {
                 <span className="font-medium">
                   {hasDuplicateValidatorIds 
                     ? "Duplicate Validator IDs" 
-                    : "Peer/Validator Mismatch"}
+                    : "Validator Identity Undercount"}
                 </span>
               </div>
               <p className="mt-1 text-[10px] text-slate-400">
                 {hasDuplicateValidatorIds 
                   ? `Gateway reports ${validatorIds.length} validators but only ${uniqueValidatorIds.size} unique ID${uniqueValidatorIds.size === 1 ? "" : "s"}. Nodes may share identity keys.`
-                  : `Gateway sees ${status.peerCount} peers but only ${uniqueValidatorIds.size} validator identity. Check DLC config or identity keys.`
+                  : `Gateway reports ${validatorCount} validators but only ${identityCount} validator identity is exposed in /status.consensus.validator_ids. This is usually a status field limitation (not necessarily a network fault).`
                 }
               </p>
               <a 
