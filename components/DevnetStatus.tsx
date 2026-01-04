@@ -23,6 +23,7 @@ interface GatewayStatus {
   consensusRound?: number;
   validatorCount?: number;
   validatorIds?: string[];
+  validatorCountSource?: ValidatorSource;
   uptimeSeconds?: number;
   mempoolSize?: number;
   rpcBase?: string;
@@ -30,7 +31,23 @@ interface GatewayStatus {
   consecutiveFailures?: number;
 }
 
-type ValidatorSource = "from_validator_ids" | "from_validators_object" | "unknown";
+type ValidatorSource = "validator_count" | "validator_ids" | "validators_map" | "unknown";
+
+function computeValidatorCount(status: any): { count: number; source: ValidatorSource } {
+  // a) prefer explicit validator_count
+  const vc = status && typeof status.validator_count === "number" ? status.validator_count : undefined;
+  if (typeof vc === "number" && vc > 0) return { count: vc, source: "validator_count" };
+
+  // b) consensus.validator_ids length
+  const ids = status?.consensus?.validator_ids;
+  if (Array.isArray(ids)) return { count: ids.length, source: "validator_ids" };
+
+  // c) consensus.validators map size
+  const vmap = status?.consensus?.validators;
+  if (vmap && typeof vmap === "object") return { count: Object.keys(vmap).length, source: "validators_map" };
+
+  return { count: 0, source: "unknown" };
+}
 
 async function fetchGatewayStatus(): Promise<GatewayStatus> {
   try {
@@ -66,7 +83,8 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
     }
 
     // Extract data from the DevNet status schema (status_schema_version: 2)
-    const validatorIds = data.consensus?.validator_ids ?? [];
+    const validatorIds = Array.isArray(data.consensus?.validator_ids) ? data.consensus.validator_ids : [];
+    const { count: validatorCount, source: validatorCountSource } = computeValidatorCount(data);
 
     return {
       ok: true,
@@ -76,8 +94,9 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
       networkActive: data.network_active === true,
       peerCount: typeof data.peer_count === "number" ? data.peer_count : undefined,
       consensusRound: typeof data.consensus?.round === "number" ? data.consensus.round : undefined,
-      validatorCount: validatorIds.length,
+      validatorCount,
       validatorIds: validatorIds,
+      validatorCountSource,
       uptimeSeconds: typeof data.uptime_seconds === "number" ? data.uptime_seconds : undefined,
       mempoolSize: typeof data.mempool_size === "number" ? data.mempool_size : undefined,
       rpcBase: json.rpc_base,
@@ -106,21 +125,16 @@ function formatUptime(seconds?: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-function getValidatorSource(validatorIds?: string[]): ValidatorSource {
-  if (validatorIds && validatorIds.length > 0) {
-    return "from_validator_ids";
-  }
-  return "unknown";
-}
-
 function getValidatorSourceLabel(source: ValidatorSource): string {
   switch (source) {
-    case "from_validator_ids":
-      return "from /status.consensus.validator_ids";
-    case "from_validators_object":
-      return "from /status.consensus.validators";
+    case "validator_count":
+      return "src: validator_count";
+    case "validator_ids":
+      return "src: validator_ids";
+    case "validators_map":
+      return "src: validators";
     default:
-      return "unknown (missing fields)";
+      return "src: unknown";
   }
 }
 
@@ -151,7 +165,7 @@ export function DevnetStatus() {
     uniqueValidatorIds.size === 1 && 
     validatorIds.length > 0;
   
-  const validatorSource = getValidatorSource(validatorIds);
+  const validatorSource = status.validatorCountSource ?? "unknown";
   const hasIdentityWarning = hasDuplicateValidatorIds || peerValidatorMismatch;
 
   return (
@@ -206,17 +220,12 @@ export function DevnetStatus() {
             />
           </div>
           
-          {/* Validator source indicator */}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[10px] text-slate-500">Validator count source:</span>
-            <span className={`rounded border px-1.5 py-0.5 text-[10px] ${
-              validatorSource === "unknown" 
-                ? "border-amber-700/50 bg-amber-900/30 text-amber-300"
-                : "border-blue-700/50 bg-blue-900/30 text-blue-300"
-            }`}>
+          {/* Tiny source label in dev mode only */}
+          {process.env.NODE_ENV !== "production" && (
+            <div className="mt-2 text-[10px] text-slate-500">
               {getValidatorSourceLabel(validatorSource)}
-            </span>
-          </div>
+            </div>
+          )}
 
           {/* Identity warning */}
           {hasIdentityWarning && (
