@@ -1,4 +1,4 @@
-function normalizeRpcBase(rawBase?: string): string | undefined {
+export function normalizeRpcBase(rawBase?: string): string | undefined {
   if (!rawBase) return undefined;
   const trimmed = rawBase.trim();
   if (!trimmed) return undefined;

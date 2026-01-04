@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { JsonViewer } from "@/components/common/JsonViewer";
+import JsonViewer from "@/components/common/JsonViewer";
 import { CopyButton } from "@/components/common/CopyButton";
 import { SourceBadge } from "@/components/common/SourceBadge";
 

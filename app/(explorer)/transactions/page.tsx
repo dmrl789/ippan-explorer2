@@ -137,7 +137,7 @@ export default function TransactionsPage() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchTransactions}
+              onClick={() => fetchTransactions(50)}
               disabled={loading}
               className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100 disabled:opacity-50"
             >
