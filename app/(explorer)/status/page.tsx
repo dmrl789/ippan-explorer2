@@ -12,6 +12,7 @@ import { fetchAiStatusWithSource } from "@/lib/ai";
 import { fetchHealthWithSource } from "@/lib/health";
 import { fetchStatusWithSource } from "@/lib/status";
 import { fetchPeers } from "@/lib/peers";
+import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -48,6 +49,18 @@ export default async function StatusPage() {
       <PageHeader title="Status" description="Operator / cluster view (health + consensus + AI) from devnet RPC" />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Gateway Probe */}
+        <Card title="Gateway Probe" description="Connection details" headerSlot={<SourceBadge source={statusSource} />}>
+          <div className="space-y-3 text-sm text-slate-200">
+            <KeyValue label="Connected to" value={IPPAN_RPC_BASE} />
+            <KeyValue label="Last fetch" value={new Date().toLocaleTimeString()} />
+            {status && (
+              <KeyValue label="Requests Served" value={status.requests_served?.toLocaleString() ?? "—"} />
+            )}
+            <KeyValue label="Gateway Status" value={statusRes.ok ? "Online" : "Unreachable"} />
+          </div>
+        </Card>
+
         <Card title="Node health" description="From /health" headerSlot={<SourceBadge source={healthSource} />}>
           {healthRes.ok && healthRes.health ? (
             <div className="grid gap-3 sm:grid-cols-2">

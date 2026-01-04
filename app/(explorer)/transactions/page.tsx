@@ -49,12 +49,12 @@ export default function TransactionsPage() {
   }, [searchQuery]);
   
   // Fetch transactions
-  const fetchTransactions = useCallback(async () => {
+  const fetchTransactions = useCallback(async (currentLimit: number = 50) => {
     setLoading(true);
     setError(null);
     
     try {
-      const res = await fetch("/api/rpc/tx/recent?limit=100", {
+      const res = await fetch(`/api/rpc/tx/recent?limit=${currentLimit}`, {
         cache: "no-store",
       });
       
@@ -83,8 +83,13 @@ export default function TransactionsPage() {
   }, []);
   
   useEffect(() => {
-    fetchTransactions();
+    fetchTransactions(50);
   }, [fetchTransactions]);
+
+  const handleLoadMore = () => {
+    const newLimit = Math.min(transactions.length + 50, 200);
+    fetchTransactions(newLimit);
+  };
   
   // Filter transactions
   const filteredTransactions = useMemo(() => {
@@ -154,32 +159,34 @@ export default function TransactionsPage() {
       <Card>
         <div className="space-y-4">
           {/* Search bar */}
-          <form onSubmit={handleSearchSubmit}>
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by tx hash, address, or block hash..."
-                className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          </form>
+          <div className="sticky top-0 z-10 bg-slate-950 pb-2 -mt-2 pt-2">
+            <form onSubmit={handleSearchSubmit}>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by tx hash, address, or block hash..."
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 shadow-sm"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
           
           {/* Status filter chips */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-2 sm:flex-wrap -mx-2 px-2 sm:mx-0 sm:px-0">
             <button
               onClick={() => setStatusFilter("all")}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition ${
                 statusFilter === "all"
                   ? "bg-emerald-900/50 text-emerald-300 border border-emerald-700/50"
                   : "bg-slate-800/50 text-slate-400 border border-slate-700/50 hover:text-slate-200"
@@ -193,7 +200,7 @@ export default function TransactionsPage() {
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition ${
                     statusFilter === status
                       ? "bg-emerald-900/50 text-emerald-300 border border-emerald-700/50"
                       : "bg-slate-800/50 text-slate-400 border border-slate-700/50 hover:text-slate-200"
@@ -350,6 +357,19 @@ export default function TransactionsPage() {
             },
           ]}
         />
+        
+        {/* Load More Button */}
+        {transactions.length > 0 && transactions.length < 200 && (
+          <div className="mt-4 flex justify-center border-t border-slate-800 pt-4">
+            <button
+              onClick={handleLoadMore}
+              disabled={loading}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-300 hover:border-emerald-500/50 hover:text-emerald-100 disabled:opacity-50"
+            >
+              {loading ? "Loading..." : "Load More"}
+            </button>
+          </div>
+        )}
       </Card>
       
       {/* Meta info */}
