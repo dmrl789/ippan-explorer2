@@ -201,8 +201,19 @@ export function DevnetStatus() {
             <StatItem label="Uptime" value={formatUptime(status.uptimeSeconds)} />
             <StatItem 
               label="Mempool" 
-              value={status.mempoolSize?.toString() ?? "—"} 
-              tooltip="Mempool size = pending transactions at this node. A value of 0 means no pending transactions right now (network may be idle or transactions are being processed quickly)."
+              value={
+                status.mempoolSize === undefined 
+                  ? "Not exposed" 
+                  : status.mempoolSize.toString()
+              } 
+              tooltip={
+                status.mempoolSize === undefined
+                  ? "Mempool size is not exposed by this node's /status endpoint."
+                  : status.mempoolSize === 0
+                    ? "Mempool=0 means no pending transactions right now. The network may be idle or transactions are being processed quickly."
+                    : "Mempool size = pending transactions at this node."
+              }
+              muted={status.mempoolSize === undefined}
             />
           </div>
           
@@ -292,11 +303,13 @@ function StatItem({
   value, 
   tooltip,
   warn = false,
+  muted = false,
 }: { 
   label: string; 
   value: string; 
   tooltip?: string;
   warn?: boolean;
+  muted?: boolean;
 }) {
   return (
     <div className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${
@@ -317,7 +330,13 @@ function StatItem({
           </span>
         )}
       </span>
-      <span className={`font-medium ${warn ? "text-amber-200" : "text-slate-200"}`}>
+      <span className={`font-medium ${
+        warn 
+          ? "text-amber-200" 
+          : muted 
+            ? "text-slate-500 italic text-[11px]" 
+            : "text-slate-200"
+      }`}>
         {value}
         {warn && <span className="ml-1">⚠️</span>}
       </span>

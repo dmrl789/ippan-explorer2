@@ -14,9 +14,19 @@ import { type BlockSummary } from "@/lib/normalize";
 import { shortenHash } from "@/lib/format";
 import { IPPAN_RPC_BASE } from "@/lib/rpc";
 
+// Response type matching the enhanced API
+type BlocksSource = "upstream_blocks" | "fallback_tx_recent";
+type FallbackReason = "blocks_404" | "blocks_error" | "blocks_empty" | null;
+
 interface BlocksResponse {
   ok: boolean;
+  blocks?: BlockSummary[];
+  // Legacy field for backwards compatibility
   data?: BlockSummary[];
+  source?: BlocksSource;
+  fallback_reason?: FallbackReason;
+  derived_block_hashes_count?: number;
+  hydrated_blocks_count?: number;
   error?: string;
   error_code?: string;
   detail?: string;
@@ -34,6 +44,12 @@ export default function BlocksPage() {
   const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  
+  // Enhanced debug state
+  const [blocksSource, setBlocksSource] = useState<BlocksSource | null>(null);
+  const [fallbackReason, setFallbackReason] = useState<FallbackReason>(null);
+  const [derivedCount, setDerivedCount] = useState<number>(0);
+  const [hydratedCount, setHydratedCount] = useState<number>(0);
 
   // Fetch blocks
   const fetchBlocks = useCallback(async () => {
@@ -47,24 +63,40 @@ export default function BlocksPage() {
 
       const data: BlocksResponse = await res.json();
 
-      if (data.ok && data.data) {
+      // Extract enhanced debug fields
+      setBlocksSource(data.source || null);
+      setFallbackReason(data.fallback_reason || null);
+      setDerivedCount(data.derived_block_hashes_count || 0);
+      setHydratedCount(data.hydrated_blocks_count || 0);
+
+      // Handle both new (blocks) and legacy (data) response formats
+      const rawBlocks = data.blocks || data.data || [];
+
+      if (data.ok) {
         // Normalize the response data
-        const normalizedBlocks = (Array.isArray(data.data) ? data.data : []).map(normalizeBlock);
+        const normalizedBlocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(normalizeBlock);
         setBlocks(normalizedBlocks);
         setSource("live");
         setMeta(data.meta || null);
         setWarnings(data.warnings || []);
+        // Clear any previous errors when ok is true
+        setError(null);
+        setErrorCode(undefined);
       } else {
         setError(data.detail || data.error || "Failed to fetch blocks");
         setErrorCode(data.error_code);
         setSource("error");
         setBlocks([]);
+        setMeta(data.meta || null);
+        setWarnings(data.warnings || []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
       setErrorCode("FETCH_ERROR");
       setSource("error");
       setBlocks([]);
+      setBlocksSource(null);
+      setFallbackReason(null);
     } finally {
       setLoading(false);
     }
@@ -124,10 +156,39 @@ export default function BlocksPage() {
         }
       />
 
-      {/* Warnings */}
-      {warnings.length > 0 && (
+      {/* Fallback Mode Notice */}
+      {blocksSource === "fallback_tx_recent" && (
+        <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-amber-400">⚠️</span>
+            <p className="text-xs font-medium text-amber-300">
+              {fallbackReason === "blocks_404" 
+                ? "Node doesn't expose /blocks endpoint"
+                : "Using tx-derived blocks (fallback mode)"}
+            </p>
+          </div>
+          <p className="text-xs text-amber-200/70">
+            {fallbackReason === "blocks_404" 
+              ? "The gateway's /blocks endpoint returns 404. Blocks are derived from recent transactions."
+              : warnings[0] || "Primary blocks endpoint unavailable, using transaction-based fallback."}
+          </p>
+          {blocks.length === 0 && derivedCount === 0 && (
+            <p className="text-xs text-slate-400 mt-1">
+              No recent transactions with included/finalized status found. The network may be idle or just started.
+            </p>
+          )}
+          <div className="flex flex-wrap gap-3 text-[10px] text-slate-500 mt-2">
+            <span>Source: <code className="text-slate-400">{blocksSource}</code></span>
+            <span>Derived hashes: <code className="text-slate-400">{derivedCount}</code></span>
+            <span>Hydrated: <code className="text-slate-400">{hydratedCount}</code></span>
+          </div>
+        </div>
+      )}
+
+      {/* Other Warnings (non-fallback related) */}
+      {blocksSource !== "fallback_tx_recent" && warnings.length > 0 && (
         <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
-          <p className="text-xs font-medium text-amber-300 mb-1">Fallback Mode Active</p>
+          <p className="text-xs font-medium text-amber-300 mb-1">Warnings</p>
           {warnings.map((w, i) => (
             <p key={i} className="text-xs text-amber-200/70">{w}</p>
           ))}
@@ -157,8 +218,18 @@ export default function BlocksPage() {
           data={blocks}
           loading={loading}
           keyExtractor={(block) => block.block_hash}
-          emptyMessage="No blocks yet"
-          emptyDescription="The DevNet may not have any blocks recorded yet, or the block list endpoint may not be available."
+          emptyMessage={
+            fallbackReason === "blocks_404" && hydratedCount === 0
+              ? "No blocks derived yet"
+              : "No blocks yet"
+          }
+          emptyDescription={
+            fallbackReason === "blocks_404"
+              ? hydratedCount === 0
+                ? "Node doesn't expose /blocks. No recent transactions with block hashes found to derive blocks from."
+                : "Using tx-derived blocks fallback."
+              : "The DevNet may not have any blocks recorded yet, or the block list endpoint may not be available."
+          }
           onRowClick={handleRowClick}
           columns={[
             {
