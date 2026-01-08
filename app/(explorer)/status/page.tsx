@@ -97,7 +97,14 @@ export default async function StatusPage() {
               <KeyValue label="Version" value={status.version} />
               <KeyValue label="Uptime" value={formatUptime(status.uptime_seconds)} />
               <KeyValue label="Peer Count" value={status.peer_count.toString()} />
-              <KeyValue label="Mempool Size" value={status.mempool_size.toString()} />
+              <KeyValue 
+                label="Mempool Size" 
+                value={
+                  status.mempool_size === undefined || status.mempool_size === null
+                    ? "Not exposed"
+                    : status.mempool_size.toString()
+                } 
+              />
               <KeyValue label="Consensus Round" value={`#${status.consensus.round}`} />
               <div className="space-y-1">
                 <div className="flex items-center justify-between">

@@ -129,8 +129,18 @@ export default async function DashboardPage() {
               <DetailItem label="Peer Count" value={status.peer_count.toString()} />
               <DetailItem 
                 label="Mempool Size" 
-                value={status.mempool_size.toString()} 
-                tooltip="Mempool=0 means no pending transactions at this node right now. If blocks/tx are failing to load, this number may still be real, but the Explorer cannot prove tx flow until block/tx endpoints respond."
+                value={
+                  status.mempool_size === undefined || status.mempool_size === null
+                    ? "Not exposed"
+                    : status.mempool_size.toString()
+                } 
+                tooltip={
+                  status.mempool_size === undefined || status.mempool_size === null
+                    ? "Mempool size is not exposed by this node's /status endpoint."
+                    : status.mempool_size === 0
+                      ? "Mempool=0 means no pending transactions right now. The network may be idle or transactions are being processed quickly."
+                      : "Mempool size = pending transactions at this node."
+                }
               />
               <DetailItem label="Consensus Round" value={`#${status.consensus.round}`} />
             </div>
@@ -173,7 +183,14 @@ export default async function DashboardPage() {
                 }
               />
               <DetailItem label="Peer Count" value={status.peer_count.toString()} />
-              <DetailItem label="Mempool Size" value={status.mempool_size.toString()} />
+              <DetailItem 
+                label="Mempool Size" 
+                value={
+                  status.mempool_size === undefined || status.mempool_size === null
+                    ? "Not exposed"
+                    : status.mempool_size.toString()
+                }
+              />
             </div>
           ) : (
             <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">

@@ -8,6 +8,10 @@ const MAX_BLOCKS = 25;
 const MAX_TX_SCAN = 200;
 const CONCURRENCY_CAP = 8;
 
+// Response source types for debugging
+type BlocksSource = "upstream_blocks" | "fallback_tx_recent";
+type FallbackReason = "blocks_404" | "blocks_error" | "blocks_empty" | null;
+
 interface TxRecentItem {
   tx_id?: string;
   hash?: string;
@@ -34,6 +38,28 @@ interface HydratedBlock {
   header?: Record<string, unknown>;
   _hydration_failed?: boolean;
   _hydration_error?: string;
+}
+
+// Enhanced response interface with explicit debug fields
+interface BlocksApiResponse {
+  ok: boolean;
+  blocks: HydratedBlock[];
+  source: BlocksSource;
+  fallback_reason: FallbackReason;
+  derived_block_hashes_count: number;
+  hydrated_blocks_count: number;
+  error?: string;
+  error_code?: string;
+  detail?: string;
+  meta: {
+    rpc_base: string;
+    ts: number;
+    limit_requested: number;
+    primary_endpoint_status?: number;
+    txs_scanned?: number;
+    blocks_failed?: number;
+  };
+  warnings: string[];
 }
 
 /**
@@ -134,6 +160,12 @@ async function hydrateBlocksConcurrently(
  *    - Take first N (max 25)
  *    - Hydrate each via /block/<hash>
  *    - Return normalized list
+ * 
+ * Response always includes explicit debug fields:
+ * - source: "upstream_blocks" | "fallback_tx_recent"
+ * - fallback_reason: "blocks_404" | "blocks_error" | "blocks_empty" | null
+ * - derived_block_hashes_count: number of unique block hashes found
+ * - hydrated_blocks_count: number of successfully hydrated blocks
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -147,6 +179,11 @@ export async function GET(request: NextRequest) {
   // Try primary endpoint first
   const primaryResult = await proxyRpcRequest(`/blocks?limit=${limit}`, { timeout: 5000 });
 
+  // Determine if primary is available and why fallback might be needed
+  const primaryStatusCode = primaryResult.status_code;
+  const primaryIs404 = primaryStatusCode === 404;
+  const primaryFailed = !primaryResult.ok;
+
   if (primaryResult.ok && primaryResult.data) {
     // Primary endpoint succeeded
     const data = primaryResult.data as Record<string, unknown>;
@@ -157,7 +194,7 @@ export async function GET(request: NextRequest) {
         : [];
 
     // Normalize blocks from primary endpoint
-    const blocks = rawBlocks.map((b: unknown) => {
+    const blocks: HydratedBlock[] = rawBlocks.map((b: unknown) => {
       const block = b as Record<string, unknown>;
       const header = block.header as Record<string, unknown> | undefined;
       
@@ -174,39 +211,67 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({
+    const response: BlocksApiResponse = {
       ok: true,
-      data: blocks,
+      blocks,
+      source: "upstream_blocks",
+      fallback_reason: null,
+      derived_block_hashes_count: 0,
+      hydrated_blocks_count: blocks.length,
       meta: {
-        source: "primary",
-        endpoint: "/blocks",
-        count: blocks.length,
         rpc_base: rpcBase,
         ts,
+        limit_requested: limit,
+        primary_endpoint_status: primaryStatusCode,
       },
       warnings,
-    });
+    };
+
+    return NextResponse.json(response);
   }
 
-  // Primary failed (likely 404) - use fallback
-  warnings.push("Primary /blocks endpoint unavailable, using tx-derived fallback");
+  // Primary failed - determine reason and use fallback
+  const fallbackReason: FallbackReason = primaryIs404 
+    ? "blocks_404" 
+    : primaryFailed 
+      ? "blocks_error" 
+      : null;
+
+  warnings.push(
+    primaryIs404 
+      ? "Primary /blocks endpoint returns 404 (not implemented), using tx-derived fallback"
+      : `Primary /blocks endpoint failed (${primaryResult.detail || primaryResult.error}), using tx-derived fallback`
+  );
 
   // Fallback: derive blocks from recent transactions
   const txResult = await proxyRpcRequest(`/tx/recent?limit=${MAX_TX_SCAN}`, { timeout: 8000 });
 
   if (!txResult.ok || !txResult.data) {
-    return NextResponse.json({
+    // Both primary and fallback failed - return informative error
+    const response: BlocksApiResponse = {
       ok: false,
+      blocks: [],
+      source: "fallback_tx_recent",
+      fallback_reason: fallbackReason,
+      derived_block_hashes_count: 0,
+      hydrated_blocks_count: 0,
       error: "blocks_unavailable",
       error_code: "FALLBACK_FAILED",
       detail: "Neither /blocks nor /tx/recent endpoints are available",
-      rpc_base: rpcBase,
-      path: "/blocks",
-      ts,
-      warnings,
-      primary_error: primaryResult.detail || primaryResult.error,
-      fallback_error: txResult.detail || txResult.error,
-    }, { status: 502 });
+      meta: {
+        rpc_base: rpcBase,
+        ts,
+        limit_requested: limit,
+        primary_endpoint_status: primaryStatusCode,
+      },
+      warnings: [
+        ...warnings,
+        `Fallback /tx/recent also failed: ${txResult.detail || txResult.error}`,
+      ],
+    };
+    
+    // Return 200 with error details so UI can display meaningful message
+    return NextResponse.json(response);
   }
 
   // Parse transaction list (accept various formats)
@@ -220,19 +285,27 @@ export async function GET(request: NextRequest) {
         : [];
 
   if (txList.length === 0) {
-    return NextResponse.json({
+    const response: BlocksApiResponse = {
       ok: true,
-      data: [],
+      blocks: [],
+      source: "fallback_tx_recent",
+      fallback_reason: fallbackReason,
+      derived_block_hashes_count: 0,
+      hydrated_blocks_count: 0,
       meta: {
-        source: "fallback_empty",
-        endpoint: "/tx/recent",
-        count: 0,
         rpc_base: rpcBase,
         ts,
-        note: "No transactions found, so no blocks to derive",
+        limit_requested: limit,
+        primary_endpoint_status: primaryStatusCode,
+        txs_scanned: 0,
       },
-      warnings,
-    });
+      warnings: [
+        ...warnings,
+        "No transactions found in /tx/recent, so no blocks to derive",
+      ],
+    };
+    
+    return NextResponse.json(response);
   }
 
   // Extract unique block hashes from finalized/included transactions
@@ -256,20 +329,27 @@ export async function GET(request: NextRequest) {
   const uniqueHashes = Array.from(blockHashes).slice(0, limit);
 
   if (uniqueHashes.length === 0) {
-    return NextResponse.json({
+    const response: BlocksApiResponse = {
       ok: true,
-      data: [],
+      blocks: [],
+      source: "fallback_tx_recent",
+      fallback_reason: fallbackReason,
+      derived_block_hashes_count: 0,
+      hydrated_blocks_count: 0,
       meta: {
-        source: "fallback_no_blocks",
-        endpoint: "/tx/recent",
-        count: 0,
-        txs_scanned: txList.length,
         rpc_base: rpcBase,
         ts,
-        note: "No included/finalized transactions with block hashes found",
+        limit_requested: limit,
+        primary_endpoint_status: primaryStatusCode,
+        txs_scanned: txList.length,
       },
-      warnings,
-    });
+      warnings: [
+        ...warnings,
+        `Scanned ${txList.length} transactions but none had included/finalized status with block hashes`,
+      ],
+    };
+    
+    return NextResponse.json(response);
   }
 
   // Hydrate blocks in parallel with concurrency limit
@@ -280,7 +360,7 @@ export async function GET(request: NextRequest) {
   const failedBlocks = hydratedBlocks.filter(b => b._hydration_failed);
 
   if (failedBlocks.length > 0) {
-    warnings.push(`${failedBlocks.length} blocks failed to hydrate`);
+    warnings.push(`${failedBlocks.length} of ${uniqueHashes.length} blocks failed to hydrate`);
   }
 
   // Sort by ippan_time_ms (newest first) if available, otherwise keep discovery order
@@ -291,20 +371,23 @@ export async function GET(request: NextRequest) {
     return 0;
   });
 
-  return NextResponse.json({
+  const response: BlocksApiResponse = {
     ok: true,
-    data: successfulBlocks,
+    blocks: successfulBlocks,
+    source: "fallback_tx_recent",
+    fallback_reason: fallbackReason,
+    derived_block_hashes_count: uniqueHashes.length,
+    hydrated_blocks_count: successfulBlocks.length,
     meta: {
-      source: "fallback_tx_derived",
-      endpoint: "/tx/recent",
-      count: successfulBlocks.length,
-      txs_scanned: txList.length,
-      blocks_attempted: uniqueHashes.length,
-      blocks_failed: failedBlocks.length,
       rpc_base: rpcBase,
       ts,
+      limit_requested: limit,
+      primary_endpoint_status: primaryStatusCode,
+      txs_scanned: txList.length,
+      blocks_failed: failedBlocks.length,
     },
     warnings,
-    failed_blocks: failedBlocks.length > 0 ? failedBlocks : undefined,
-  });
+  };
+
+  return NextResponse.json(response);
 }
