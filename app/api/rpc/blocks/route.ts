@@ -193,55 +193,68 @@ export async function GET(request: NextRequest) {
         ? data.blocks 
         : [];
 
-    // Normalize blocks from primary endpoint
-    const blocks: HydratedBlock[] = rawBlocks.map((b: unknown) => {
-      const block = b as Record<string, unknown>;
-      const header = block.header as Record<string, unknown> | undefined;
-      
-      return {
-        block_hash: (block.block_hash as string) || (block.hash as string) || (block.id as string) || "",
-        prev_block_hash: (header?.prev_block_hash as string) || (block.prev_block_hash as string),
-        round_id: (block.round_id as number | string) || (header?.round_id as number | string),
-        hashtimer: (block.hash_timer_id as string) || (block.hashtimer as string),
-        tx_count: 
-          (block.tx_count as number) ||
-          (Array.isArray(block.tx_ids) ? block.tx_ids.length : undefined),
-        timestamp: (block.timestamp as string) || (header?.timestamp as string),
-        ippan_time_ms: (block.ippan_time_ms as number) || (header?.ippan_time_ms as number),
+    // If primary returns empty, trigger fallback instead of returning empty
+    // This handles gateways that return 200 OK with [] instead of actual blocks
+    if (rawBlocks.length === 0) {
+      warnings.push("Primary /blocks returned 200 but with empty array, using tx-derived fallback");
+      // Fall through to fallback logic below
+    } else {
+      // Normalize blocks from primary endpoint
+      const blocks: HydratedBlock[] = rawBlocks.map((b: unknown) => {
+        const block = b as Record<string, unknown>;
+        const header = block.header as Record<string, unknown> | undefined;
+        
+        return {
+          block_hash: (block.block_hash as string) || (block.hash as string) || (block.id as string) || "",
+          prev_block_hash: (header?.prev_block_hash as string) || (block.prev_block_hash as string),
+          round_id: (block.round_id as number | string) || (header?.round_id as number | string),
+          hashtimer: (block.hash_timer_id as string) || (block.hashtimer as string),
+          tx_count: 
+            (block.tx_count as number) ||
+            (Array.isArray(block.tx_ids) ? block.tx_ids.length : undefined),
+          timestamp: (block.timestamp as string) || (header?.timestamp as string),
+          ippan_time_ms: (block.ippan_time_ms as number) || (header?.ippan_time_ms as number),
+        };
+      });
+
+      const response: BlocksApiResponse = {
+        ok: true,
+        blocks,
+        source: "upstream_blocks",
+        fallback_reason: null,
+        derived_block_hashes_count: 0,
+        hydrated_blocks_count: blocks.length,
+        meta: {
+          rpc_base: rpcBase,
+          ts,
+          limit_requested: limit,
+          primary_endpoint_status: primaryStatusCode,
+        },
+        warnings,
       };
-    });
 
-    const response: BlocksApiResponse = {
-      ok: true,
-      blocks,
-      source: "upstream_blocks",
-      fallback_reason: null,
-      derived_block_hashes_count: 0,
-      hydrated_blocks_count: blocks.length,
-      meta: {
-        rpc_base: rpcBase,
-        ts,
-        limit_requested: limit,
-        primary_endpoint_status: primaryStatusCode,
-      },
-      warnings,
-    };
-
-    return NextResponse.json(response);
+      return NextResponse.json(response);
+    }
+    // else: rawBlocks.length === 0, fall through to fallback below
   }
 
-  // Primary failed - determine reason and use fallback
-  const fallbackReason: FallbackReason = primaryIs404 
-    ? "blocks_404" 
-    : primaryFailed 
-      ? "blocks_error" 
-      : null;
+  // Primary failed OR returned empty - determine reason and use fallback
+  const primaryReturnedEmpty = primaryResult.ok && primaryResult.data;
+  const fallbackReason: FallbackReason = primaryReturnedEmpty
+    ? "blocks_empty"
+    : primaryIs404 
+      ? "blocks_404" 
+      : primaryFailed 
+        ? "blocks_error" 
+        : null;
 
-  warnings.push(
-    primaryIs404 
-      ? "Primary /blocks endpoint returns 404 (not implemented), using tx-derived fallback"
-      : `Primary /blocks endpoint failed (${primaryResult.detail || primaryResult.error}), using tx-derived fallback`
-  );
+  if (!primaryReturnedEmpty) {
+    warnings.push(
+      primaryIs404 
+        ? "Primary /blocks endpoint returns 404 (not implemented), using tx-derived fallback"
+        : `Primary /blocks endpoint failed (${primaryResult.detail || primaryResult.error}), using tx-derived fallback`
+    );
+  }
 
   // Fallback: derive blocks from recent transactions
   const txResult = await proxyRpcRequest(`/tx/recent?limit=${MAX_TX_SCAN}`, { timeout: 8000 });
