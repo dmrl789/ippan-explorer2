@@ -15,8 +15,41 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+/**
+ * Normalize origin by stripping trailing slashes.
+ */
+function normalizeOrigin(origin: string): string {
+  return origin.replace(/\/+$/, "");
+}
+
+/**
+ * Get the server-side proxy base URL using Vercel-provided env vars.
+ * This avoids `next/headers` which would break client component imports.
+ * 
+ * Priority:
+ * 1. NEXT_PUBLIC_SITE_URL / SITE_URL - explicit site URL (for custom domains)
+ * 2. VERCEL_URL - auto-provided by Vercel (deployment URL without scheme)
+ * 3. localhost:3000 - local dev fallback
+ */
+function getServerProxyBase(): string | null {
+  // Preferred: explicitly set for custom domain correctness
+  const site = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL;
+  if (site) return `${normalizeOrigin(site)}/api/rpc`;
+
+  // Vercel provides this automatically (no scheme)
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}/api/rpc`;
+
+  // Local dev fallback (works for `next dev`)
+  if (process.env.NODE_ENV !== "production") return "http://localhost:3000/api/rpc";
+
+  return null;
+}
+
 function getRpcBaseFromEnv(): string | undefined {
   const rawBase =
+    // Server-side preferred (matches rpcProxy.ts)
+    process.env.IPPAN_RPC_BASE_URL ??
     process.env.NEXT_PUBLIC_IPPAN_RPC_BASE ??
     process.env.NEXT_PUBLIC_IPPAN_RPC_URL ??
     process.env.IPPAN_RPC_URL ??
@@ -62,11 +95,17 @@ export function getEnvRpcBaseUrl(): string | undefined {
 /**
  * Get the effective RPC base URL for the current environment.
  * - Browser: Returns "/api/rpc" to use same-origin proxy (HTTPS-safe)
- * - Server: Returns the direct RPC base URL
+ * - Server (SSR): Returns absolute proxy URL (e.g., "https://example.vercel.app/api/rpc")
+ *   This ensures SSR requests go through the proxy just like browser requests,
+ *   avoiding issues with missing/incorrect env vars on the server.
+ * - Server (fallback): Returns direct RPC base URL if proxy base can't be determined
  * 
  * This automatically handles mixed content issues by using the proxy
  * when running in the browser. The browser NEVER makes direct HTTP
  * calls to the RPC gateway.
+ * 
+ * NOTE: This module is safe to import from client components because it does NOT
+ * use `next/headers`. SSR origin detection uses Vercel-provided env vars instead.
  */
 export function getEffectiveRpcBase(): string {
   // In browser, ALWAYS use the proxy to avoid mixed content (HTTPS -> HTTP blocked)
@@ -74,8 +113,21 @@ export function getEffectiveRpcBase(): string {
   if (isBrowser()) {
     return "/api/rpc";
   }
-  // On server, use direct RPC base (server-side can make HTTP requests)
-  return IPPAN_RPC_BASE;
+  
+  // On server (SSR), prefer calling our own proxy to avoid mixed content / CORS / unset gateway env
+  const serverProxy = getServerProxyBase();
+  if (serverProxy) {
+    return serverProxy;
+  }
+  
+  // Fallback: direct RPC if proxy base can't be determined
+  // This uses the configured gateway base or hardcoded default
+  return (
+    process.env.IPPAN_RPC_BASE_URL ||
+    process.env.IPPAN_RPC_BASE ||
+    process.env.NEXT_PUBLIC_IPPAN_RPC_BASE ||
+    DEFAULT_RPC_BASE
+  );
 }
 
 /**
