@@ -6,6 +6,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchIpndhtFiles } from "@/lib/files";
 
+// Force dynamic rendering - never use cached/stale data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface FilesPageProps {
   searchParams?: { id?: string; owner?: string; tag?: string; query?: string };
 }

@@ -5,6 +5,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchIpndht } from "@/lib/ipndht";
 
+// Force dynamic rendering - never use cached/stale data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function formatSize(bytes?: number) {
   if (bytes === undefined || bytes === null) return "—";
   if (bytes < 1024) return `${bytes.toLocaleString()} B`;

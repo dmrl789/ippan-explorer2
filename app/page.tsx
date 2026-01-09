@@ -15,6 +15,10 @@ import { getRpcBaseUrl } from "@/lib/rpcBase";
 import { fetchPeers } from "@/lib/peers";
 import { fetchIpndht } from "@/lib/ipndht";
 
+// Force dynamic rendering - never use cached/stale data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
