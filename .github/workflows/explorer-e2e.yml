@@ -1,0 +1,45 @@
+name: Explorer E2E
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+          
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: Install Playwright
+        run: |
+          pnpm add -D @playwright/test
+          pnpm exec playwright install --with-deps
+          
+      - name: Create output directories
+        run: mkdir -p audit/explorer2/out
+        
+      - name: Run E2E tests
+        run: pnpm exec playwright test audit/explorer2/explorer2.e2e.spec.ts --reporter=line
+        env:
+          E2E_BASE_URL: https://ippan-explorer2.vercel.app
+          
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: explorer-e2e-screenshots
+          path: audit/explorer2/out
+          retention-days: 7
