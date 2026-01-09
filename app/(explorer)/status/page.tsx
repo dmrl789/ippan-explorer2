@@ -53,17 +53,30 @@ function formatUptime(seconds: number | null | undefined): string {
   return `${hours}h ${minutes}m`;
 }
 
+interface HealthData {
+  consensus?: boolean;
+  rpc?: boolean;
+  storage?: boolean;
+  dhtFile?: { healthy?: boolean; mode?: string };
+  dhtHandle?: { healthy?: boolean; mode?: string };
+}
+
+type HealthStatus = "available" | "unavailable" | "error";
+
 export default function StatusPage() {
   const [status, setStatus] = useState<StatusData | null>(null);
+  const [health, setHealth] = useState<HealthData | null>(null);
+  const [healthStatus, setHealthStatus] = useState<HealthStatus>("unavailable");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<DataSource>("error");
 
   useEffect(() => {
-    async function fetchStatus() {
+    async function fetchAll() {
       setLoading(true);
       setError(null);
       
+      // Fetch status
       try {
         const res = await fetch("/api/rpc/status", { cache: "no-store" });
         const json = await res.json();
@@ -78,14 +91,33 @@ export default function StatusPage() {
       } catch (e) {
         setError(e instanceof Error ? e.message : "Network error");
         setSource("error");
-      } finally {
-        setLoading(false);
       }
+      
+      // Fetch health (separately, can fail without breaking page)
+      try {
+        const healthRes = await fetch("/api/rpc/health", { cache: "no-store" });
+        const healthJson = await healthRes.json();
+        
+        if (healthJson.ok && healthJson.data) {
+          setHealth(healthJson.data);
+          setHealthStatus("available");
+        } else if (healthRes.status === 404 || healthJson.error_code === "HTTP_404") {
+          // Endpoint not exposed - this is expected
+          setHealthStatus("unavailable");
+        } else {
+          setHealthStatus("error");
+        }
+      } catch {
+        // Health endpoint not available - this is OK
+        setHealthStatus("unavailable");
+      }
+      
+      setLoading(false);
     }
     
-    fetchStatus();
+    fetchAll();
     // Refresh every 30 seconds
-    const interval = setInterval(fetchStatus, 30000);
+    const interval = setInterval(fetchAll, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -138,6 +170,42 @@ export default function StatusPage() {
               <KeyValue label="Requests Served" value={status.requests_served?.toLocaleString() ?? "—"} />
             )}
           </div>
+        </Card>
+
+        {/* Node Health */}
+        <Card 
+          title="Node Health" 
+          description="From /health endpoint"
+          headerSlot={
+            <span className={`text-xs px-2 py-0.5 rounded ${
+              healthStatus === "available" ? "bg-emerald-900/50 text-emerald-300" :
+              healthStatus === "unavailable" ? "bg-slate-800 text-slate-400" :
+              "bg-amber-900/50 text-amber-300"
+            }`}>
+              {healthStatus === "available" ? "live" : healthStatus === "unavailable" ? "not exposed" : "error"}
+            </span>
+          }
+        >
+          {healthStatus === "available" && health ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <HealthRow label="Consensus" ok={health.consensus ?? false} />
+              <HealthRow label="RPC" ok={health.rpc ?? false} />
+              <HealthRow label="Storage" ok={health.storage ?? false} />
+              <HealthRow label="DHT Files" ok={health.dhtFile?.healthy ?? false} detail={health.dhtFile?.mode} />
+              <HealthRow label="DHT Handles" ok={health.dhtHandle?.healthy ?? false} detail={health.dhtHandle?.mode} />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
+              <p className="text-sm text-slate-400">
+                {healthStatus === "unavailable" 
+                  ? "Health endpoint not exposed on this DevNet yet"
+                  : "Health data unavailable"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                This is expected during early DevNet phases. Node is online.
+              </p>
+            </div>
+          )}
         </Card>
 
         {/* Node Status */}
@@ -252,6 +320,22 @@ function KeyValue({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between">
       <span className="text-slate-400">{label}</span>
       <span className="font-semibold text-slate-100">{value}</span>
+    </div>
+  );
+}
+
+function HealthRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-slate-800/70 bg-slate-950/50 px-3 py-2">
+      <div>
+        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+        {detail && <p className="text-xs text-slate-400">{detail}</p>}
+      </div>
+      <span className={`text-xs px-2 py-0.5 rounded ${
+        ok ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300"
+      }`}>
+        {ok ? "OK" : "—"}
+      </span>
     </div>
   );
 }
