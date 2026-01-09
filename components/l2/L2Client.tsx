@@ -193,9 +193,9 @@ export default function L2Client() {
                 </div>
               )}
               <div className="flex flex-wrap gap-2 pt-2">
-                {app.links?.docs && (
+                {app.docsUrl && (
                   <a
-                    href={app.links.docs}
+                    href={app.docsUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs text-emerald-300 underline-offset-4 hover:underline"
@@ -203,13 +203,15 @@ export default function L2Client() {
                     Docs
                   </a>
                 )}
-                {app.links?.explorer && (
-                  <Link
-                    href={app.links.explorer}
+                {app.externalUrl && (
+                  <a
+                    href={app.externalUrl}
+                    target="_blank"
+                    rel="noreferrer"
                     className="text-xs text-emerald-300 underline-offset-4 hover:underline"
                   >
                     Explorer
-                  </Link>
+                  </a>
                 )}
               </div>
             </div>
