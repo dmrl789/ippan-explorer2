@@ -9,6 +9,10 @@ import { fetchIpndhtFiles } from "@/lib/files";
 import { fetchAccountSummary } from "@/lib/accounts";
 import type { PaymentEntry } from "@/types/rpc";
 
+// Force dynamic rendering - never use cached/stale data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface AccountPageProps {
   params: { address: string };
 }

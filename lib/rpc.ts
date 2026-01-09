@@ -186,6 +186,7 @@ async function safeJsonFetchWithStatusInternal<T>(
       ...init,
       signal: init?.signal ?? controller.signal,
       cache: "no-store",
+      next: { revalidate: 0 },
       headers: {
         "Content-Type": "application/json",
         ...(init?.headers ?? {}),

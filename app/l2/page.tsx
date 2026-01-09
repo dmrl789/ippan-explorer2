@@ -6,6 +6,10 @@ import { fetchStatusWithSource } from "@/lib/status";
 import { fetchIpndht } from "@/lib/ipndht";
 import { L2_APPS, type L2App } from "@/lib/l2Config";
 
+// Force dynamic rendering - never use cached/stale data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function categoryLabel(category: L2App["category"]) {
   switch (category) {
     case "ai":

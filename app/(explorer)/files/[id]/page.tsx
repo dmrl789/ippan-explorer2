@@ -6,6 +6,10 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { fetchIpndhtFileDescriptor } from "@/lib/files";
 
+// Force dynamic rendering - never use cached/stale data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface FilePageProps {
   params: { id: string };
 }
