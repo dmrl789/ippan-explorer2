@@ -93,10 +93,10 @@ export default async function StatusPage() {
                 <span className="text-slate-400">Network Active</span>
                 <StatusPill status={status.network_active ? "ok" : "warn"} />
               </div>
-              <KeyValue label="Node ID" value={status.node_id} />
-              <KeyValue label="Version" value={status.version} />
-              <KeyValue label="Uptime" value={formatUptime(status.uptime_seconds)} />
-              <KeyValue label="Peer Count" value={status.peer_count.toString()} />
+              <KeyValue label="Node ID" value={status.node_id ?? "—"} />
+              <KeyValue label="Version" value={status.version ?? "—"} />
+              <KeyValue label="Uptime" value={status.uptime_seconds != null ? formatUptime(status.uptime_seconds) : "—"} />
+              <KeyValue label="Peer Count" value={status.peer_count?.toString() ?? "—"} />
               <KeyValue 
                 label="Mempool Size" 
                 value={
@@ -105,7 +105,7 @@ export default async function StatusPage() {
                     : status.mempool_size.toString()
                 } 
               />
-              <KeyValue label="Consensus Round" value={`#${status.consensus.round}`} />
+              <KeyValue label="Consensus Round" value={status.consensus?.round != null ? `#${status.consensus.round}` : "—"} />
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Validators</span>

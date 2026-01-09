@@ -38,8 +38,14 @@ export async function GET(request: NextRequest) {
   if (!result.ok) {
     // 404 means endpoint not implemented yet
     const status = result.status_code === 404 ? 404 : 502;
-    return NextResponse.json(result, { status });
+    return NextResponse.json(result, { 
+      status,
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    });
   }
 
-  return NextResponse.json(result, { status: 200 });
+  return NextResponse.json(result, { 
+    status: 200,
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
 }

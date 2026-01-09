@@ -60,9 +60,21 @@ export default function TransactionsPage() {
       
       const data: TransactionsResponse = await res.json();
       
-      if (data.ok && data.data) {
+      // Defensive parsing: handle multiple response shapes
+      // - { ok: true, data: [...] }
+      // - { ok: true, txs: [...] }
+      // - { data: { data: [...] } } (double-wrapped)
+      // - Direct array (legacy)
+      const rawTxs = 
+        Array.isArray(data?.data) ? data.data :
+        Array.isArray((data as any)?.txs) ? (data as any).txs :
+        Array.isArray((data as any)?.data?.data) ? (data as any).data.data :
+        Array.isArray(data) ? data :
+        [];
+      
+      if (rawTxs.length > 0 || data.ok) {
         // Normalize the response data
-        const txs = (Array.isArray(data.data) ? data.data : []).map(normalizeTransaction);
+        const txs = rawTxs.map(normalizeTransaction);
         setTransactions(txs);
         setSource("live");
         setMeta(data.meta || null);
