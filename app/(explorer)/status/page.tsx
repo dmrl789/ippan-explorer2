@@ -174,7 +174,7 @@ export default async function StatusPage() {
         {status ? (
           <ValidatorIdentityPanel 
             validatorIds={validatorIds}
-            selfId={status.consensus.self_id}
+            selfId={status.consensus?.self_id}
             reportedValidatorCount={validatorCount}
           />
         ) : (
