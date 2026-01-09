@@ -26,23 +26,39 @@ function formatUptime(seconds: number): string {
 }
 
 export default async function StatusPage() {
-  const [healthRes, aiRes, statusRes, peersRes] = await Promise.all([
-    fetchHealthWithSource(), 
-    fetchAiStatusWithSource(), 
-    fetchStatusWithSource(),
-    fetchPeers(),
-  ]);
-  const healthSource = healthRes.ok ? healthRes.source : "error";
-  const aiSource = aiRes.ok ? (aiRes.source === "missing" ? "live" : aiRes.source) : "error";
-  const statusSource = statusRes.ok ? statusRes.source : "error";
+  // Wrap all data fetching in try-catch to prevent SSR crashes
+  let healthRes, aiRes, statusRes, peersRes;
+  try {
+    [healthRes, aiRes, statusRes, peersRes] = await Promise.all([
+      fetchHealthWithSource().catch(() => ({ ok: false, source: "error" as const, error: "Fetch failed", health: null })),
+      fetchAiStatusWithSource().catch(() => ({ ok: false, source: "error" as const, error: "Fetch failed" })),
+      fetchStatusWithSource().catch(() => ({ ok: false, source: "error" as const, error: "Fetch failed" })),
+      fetchPeers().catch(() => ({ ok: false, source: "error" as const, error: "Fetch failed", peers: [] })),
+    ]);
+  } catch (e) {
+    // If Promise.all itself fails, return a minimal error page
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Status" description="Error loading status page" />
+        <div className="rounded-lg border border-red-800 bg-red-900/30 p-4">
+          <p className="text-red-300">Failed to load status data. Please try refreshing.</p>
+          <p className="text-xs text-red-400 mt-2">{e instanceof Error ? e.message : "Unknown error"}</p>
+        </div>
+      </div>
+    );
+  }
 
-  const status = statusRes.ok ? statusRes.status : undefined;
-  const rawStatus = statusRes.ok ? statusRes.rawStatus : (statusRes.rawStatus ?? null);
-  const ippanTime = statusRes.ok ? statusRes.ippanTime : null;
-  const hashTimerData = statusRes.ok ? statusRes.hashTimerData : null;
+  const healthSource = healthRes?.ok ? healthRes.source : "error";
+  const aiSource = aiRes?.ok ? (aiRes.source === "missing" ? "live" : aiRes.source) : "error";
+  const statusSource = statusRes?.ok ? statusRes.source : "error";
+
+  const status = statusRes?.ok ? statusRes.status : undefined;
+  const rawStatus = statusRes?.ok ? statusRes.rawStatus : (statusRes?.rawStatus ?? null);
+  const ippanTime = statusRes?.ok ? statusRes.ippanTime : null;
+  const hashTimerData = statusRes?.ok ? statusRes.hashTimerData : null;
   const validatorIds = status?.consensus?.validator_ids ?? [];
   const { source: validatorSource, count: validatorCount } = getValidatorSource(status);
-  const peerCount = status?.peer_count ?? peersRes.peers.length;
+  const peerCount = status?.peer_count ?? (peersRes?.peers?.length ?? 0);
 
   return (
     <div className="space-y-6">
