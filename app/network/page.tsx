@@ -16,9 +16,24 @@ interface NormalizedPeer {
 }
 
 function normalizePeers(input: unknown): NormalizedPeer[] {
-  if (!Array.isArray(input)) return [];
+  // Handle various formats: array, { peers: [...] }, { items: [...] }
+  let dataArray: unknown[];
+  if (Array.isArray(input)) {
+    dataArray = input;
+  } else if (input && typeof input === "object") {
+    const obj = input as Record<string, unknown>;
+    if (Array.isArray(obj.peers)) {
+      dataArray = obj.peers;
+    } else if (Array.isArray(obj.items)) {
+      dataArray = obj.items;
+    } else {
+      return [];
+    }
+  } else {
+    return [];
+  }
   
-  return input.map((p, index) => {
+  return dataArray.map((p, index) => {
     // Case 1: string like "http://188.245.97.41:9000"
     if (typeof p === "string") {
       const addr = p.replace("http://", "").replace("https://", "");

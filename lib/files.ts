@@ -36,14 +36,15 @@ export async function fetchIpndhtFiles(): Promise<
   | { ok: true; source: "live"; files: IpndhtFileDescriptor[] }
   | { ok: false; source: "error"; error: string; errorCode?: string; files: IpndhtFileDescriptor[] }
 > {
-  const { status, data: payload } = await safeJsonFetchWithStatus<any>("/files");
+  // Use /ipndht/files endpoint (not /files) - this is what the gateway exposes
+  const { status, data: payload } = await safeJsonFetchWithStatus<any>("/ipndht/files?limit=100");
   
-  // DevNet may not expose /files endpoint yet (404)
+  // DevNet may not expose endpoint yet (404)
   if (status === 404) {
     return {
       ok: false,
       source: "error",
-      error: "Files endpoint not available on this DevNet (404). The node is online but does not expose /files yet.",
+      error: "IPNDHT files endpoint not available on this DevNet (404).",
       errorCode: "endpoint_not_available",
       files: []
     };
@@ -59,7 +60,14 @@ export async function fetchIpndhtFiles(): Promise<
     };
   }
   
-  const rawFiles: any[] = Array.isArray(payload) ? payload : Array.isArray(payload?.files) ? payload.files : [];
+  // Handle various response formats: { items: [...] }, { files: [...] }, or direct array
+  const rawFiles: any[] = Array.isArray(payload) 
+    ? payload 
+    : Array.isArray(payload?.items) 
+      ? payload.items 
+      : Array.isArray(payload?.files) 
+        ? payload.files 
+        : [];
   return { ok: true, source: "live", files: rawFiles.map((record, idx) => normalizeFile(record, `file-${idx}`)) };
 }
 
@@ -70,7 +78,8 @@ export async function fetchIpndhtFileDescriptor(
   | { ok: true; source: "live"; file: null }
   | { ok: false; source: "error"; error: string }
 > {
-  const { status, data } = await safeJsonFetchWithStatus<any>(`/files/${encodeURIComponent(id)}`);
+  // Use /ipndht/files/:id endpoint
+  const { status, data } = await safeJsonFetchWithStatus<any>(`/ipndht/files/${encodeURIComponent(id)}`);
   if (status === 404) {
     return { ok: true, source: "live", file: null };
   }
