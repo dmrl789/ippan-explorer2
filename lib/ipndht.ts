@@ -58,10 +58,21 @@ export async function fetchIpndht(): Promise<
   | ({ ok: true; source: "live" } & Omit<IpndhtResponse, "source">)
   | ({ ok: false; source: "error"; error: string; errorCode?: string } & Omit<IpndhtResponse, "source">)
 > {
-  const { status, data: payload } = await safeJsonFetchWithStatus<any>("/ipndht");
+  // Fetch from the new IPNDHT endpoints in parallel
+  const [summaryResult, handlesResult, filesResult] = await Promise.all([
+    safeJsonFetchWithStatus<any>("/ipndht/summary"),
+    safeJsonFetchWithStatus<any>("/ipndht/handles?limit=10"),
+    safeJsonFetchWithStatus<any>("/ipndht/files?limit=10"),
+  ]);
+
+  const summaryPayload = summaryResult.data;
+  const handlesPayload = handlesResult.data;
+  const filesPayload = filesResult.data;
+
+  // Check if any endpoint returned 404 (not implemented)
+  const all404 = summaryResult.status === 404 && handlesResult.status === 404 && filesResult.status === 404;
   
-  // DevNet may not expose /ipndht endpoint yet (404 is expected)
-  if (status === 404) {
+  if (all404) {
     return {
       ok: false,
       source: "error",
@@ -75,7 +86,8 @@ export async function fetchIpndht(): Promise<
     };
   }
   
-  if (!payload) {
+  // Check if gateway is unreachable
+  if (!summaryPayload && !handlesPayload && !filesPayload) {
     return {
       ok: false,
       source: "error",
@@ -89,33 +101,39 @@ export async function fetchIpndht(): Promise<
     };
   }
 
-  const rawHandles: any[] =
-    Array.isArray(payload?.latest_handles) ? payload.latest_handles : Array.isArray(payload?.handles) ? payload.handles : [];
-  const rawFiles: any[] =
-    Array.isArray(payload?.latest_files) ? payload.latest_files : Array.isArray(payload?.files) ? payload.files : [];
-  const rawProviders: any[] = Array.isArray(payload?.providers) ? payload.providers : [];
+  // Determine section status
+  const handlesSectionOk = handlesResult.status === 200 && handlesPayload?.ok;
+  const filesSectionOk = filesResult.status === 200 && filesPayload?.ok;
+  const summarySectionOk = summaryResult.status === 200 && summaryPayload?.ok;
+
+  // Parse handles from new endpoint format
+  const rawHandles: any[] = Array.isArray(handlesPayload?.items) ? handlesPayload.items : [];
+  const rawFiles: any[] = Array.isArray(filesPayload?.items) ? filesPayload.items : [];
 
   const latest_handles = rawHandles.map((record, index) => normalizeHandle(record, `handle-${index}`));
   const latest_files = rawFiles.map((record, index) => normalizeFile(record, `file-${index}`));
-  const providers: IpndhtProvider[] = rawProviders
-    .map((record: any) => ({
-      peer_id: typeof record?.peer_id === "string" ? record.peer_id : "",
-      provides: record?.provides === "handles" || record?.provides === "files" || record?.provides === "both" ? record.provides : "both"
-    }))
-    .filter((p) => p.peer_id.length > 0);
 
-  const summary = payload?.summary && typeof payload.summary === "object" ? payload.summary : {};
+  // Providers not implemented yet
+  const providers: IpndhtProvider[] = [];
+
+  // Build summary from /ipndht/summary or fall back to counts
+  const summary = summaryPayload ?? {};
 
   return {
     ok: true,
     source: "live",
-    sections: { handles: "live", files: "live", providers: "live", peers: "live" },
+    sections: {
+      handles: handlesSectionOk ? "live" : "error",
+      files: filesSectionOk ? "live" : "error",
+      providers: "error", // Not implemented yet
+      peers: summarySectionOk ? "live" : "error"
+    },
     summary: {
-      handles_count: typeof summary.handles_count === "number" ? summary.handles_count : latest_handles.length,
-      files_count: typeof summary.files_count === "number" ? summary.files_count : latest_files.length,
-      providers_count: typeof summary.providers_count === "number" ? summary.providers_count : providers.length,
-      peers_count: typeof summary.peers_count === "number" ? summary.peers_count : 0,
-      dht_peers_count: typeof summary.dht_peers_count === "number" ? summary.dht_peers_count : undefined
+      handles_count: typeof summary.handles === "number" ? summary.handles : handlesPayload?.total ?? latest_handles.length,
+      files_count: typeof summary.files === "number" ? summary.files : filesPayload?.total ?? latest_files.length,
+      providers_count: typeof summary.providers === "number" ? summary.providers : 0,
+      peers_count: typeof summary.dht_peers === "number" ? summary.dht_peers : 0,
+      dht_peers_count: typeof summary.dht_peers === "number" ? summary.dht_peers : undefined
     },
     latest_handles,
     latest_files,

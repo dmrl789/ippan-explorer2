@@ -65,6 +65,9 @@ export async function GET() {
     txRecentProbe,
     blocksListProbe,
     peersProbe,
+    ipndhtSummaryProbe,
+    ipndhtHandlesProbe,
+    ipndhtFilesProbe,
   ] = await Promise.all([
     probeEndpoint("/status", ts, {
       extractSample: (data: unknown) => {
@@ -108,6 +111,32 @@ export async function GET() {
             ? (data as any).peers
             : [];
         return { count: arr.length };
+      },
+    }),
+    // IPNDHT probes
+    probeEndpoint("/ipndht/summary", ts, {
+      extractSample: (data: unknown) => {
+        const d = data as Record<string, unknown>;
+        return {
+          handles: d?.handles,
+          files: d?.files,
+          dht_peers: d?.dht_peers,
+          dht_enabled: d?.dht_enabled,
+        };
+      },
+    }),
+    probeEndpoint("/ipndht/handles?limit=5", ts, {
+      extractSample: (data: unknown) => {
+        const d = data as Record<string, unknown>;
+        const items = Array.isArray(d?.items) ? d.items : [];
+        return { count: items.length, total: d?.total };
+      },
+    }),
+    probeEndpoint("/ipndht/files?limit=5", ts, {
+      extractSample: (data: unknown) => {
+        const d = data as Record<string, unknown>;
+        const items = Array.isArray(d?.items) ? d.items : [];
+        return { count: items.length, total: d?.total };
       },
     }),
   ]);
@@ -190,6 +219,25 @@ export async function GET() {
       ...peersProbe,
       required: false,
       description: "Connected peers list",
+    },
+    // IPNDHT endpoints
+    ipndht_summary: {
+      ...ipndhtSummaryProbe,
+      required: false,
+      description: "IPNDHT service summary (handles, files, DHT peers)",
+      endpoint: "/ipndht/summary",
+    },
+    ipndht_handles: {
+      ...ipndhtHandlesProbe,
+      required: false,
+      description: "IPNDHT registered handles list",
+      endpoint: "/ipndht/handles?limit=N",
+    },
+    ipndht_files: {
+      ...ipndhtFilesProbe,
+      required: false,
+      description: "IPNDHT file descriptors list",
+      endpoint: "/ipndht/files?limit=N",
     },
   };
 
@@ -286,6 +334,9 @@ export async function GET() {
       block_detail: true, // always try
       status_dashboard: statusProbe.ok,
       network_peers: peersProbe.ok,
+      ipndht_overview: ipndhtSummaryProbe.ok,
+      ipndht_handles: ipndhtHandlesProbe.ok,
+      ipndht_files: ipndhtFilesProbe.ok,
     },
   };
 
