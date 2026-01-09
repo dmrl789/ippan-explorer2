@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import JsonViewer from "@/components/common/JsonViewer";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -5,14 +8,38 @@ import { SourceBadge } from "@/components/common/SourceBadge";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
 import { ValidatorIdentityPanel } from "@/components/common/ValidatorIdentityPanel";
-import { GatewayTruth } from "@/components/common/GatewayTruth";
-import { IppanTimeCard } from "@/components/IppanTimeCard";
-import { RawStatusViewer } from "@/components/RawStatusViewer";
-import { fetchAiStatusWithSource } from "@/lib/ai";
-import { fetchHealthWithSource } from "@/lib/health";
-import { fetchStatusWithSource } from "@/lib/status";
-import { fetchPeers } from "@/lib/peers";
-import { IPPAN_RPC_BASE } from "@/lib/rpc";
+
+type DataSource = "live" | "error";
+
+interface StatusData {
+  node_id?: string;
+  version?: string;
+  build_sha?: string;
+  status?: string;
+  network_active?: boolean;
+  peer_count?: number;
+  peers?: string[];
+  mempool_size?: number;
+  uptime_seconds?: number;
+  requests_served?: number;
+  validator_count?: number;
+  ai?: {
+    enabled?: boolean;
+    using_stub?: boolean;
+    model_hash?: string;
+    model_version?: string;
+    consensus_mode?: string;
+    shadow_loaded?: boolean;
+    shadow_model_hash?: string;
+  };
+  consensus?: {
+    round?: number;
+    self_id?: string;
+    validator_ids?: string[];
+    validators?: Record<string, unknown>;
+    metrics_available?: boolean;
+  };
+}
 
 function formatUptime(seconds: number | null | undefined): string {
   if (seconds == null) return "—";
@@ -26,67 +53,95 @@ function formatUptime(seconds: number | null | undefined): string {
   return `${hours}h ${minutes}m`;
 }
 
-export default async function StatusPage() {
-  // Fetch all data with individual error handling to prevent any single failure from crashing the page
-  const [healthRes, aiRes, statusRes, peersRes] = await Promise.all([
-    fetchHealthWithSource().catch(() => ({ ok: false as const, source: "error" as const, error: "Fetch failed", health: null })),
-    fetchAiStatusWithSource().catch(() => ({ ok: false as const, source: "error" as const, error: "Fetch failed", aiAvailable: false, ai: null })),
-    fetchStatusWithSource().catch(() => ({ ok: false as const, source: "error" as const, error: "Fetch failed", rawStatus: null })),
-    fetchPeers().catch(() => ({ ok: false as const, source: "error" as const, error: "Fetch failed", peers: [] })),
-  ]);
+export default function StatusPage() {
+  const [status, setStatus] = useState<StatusData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<DataSource>("error");
 
-  const healthSource = healthRes?.ok ? healthRes.source : "error";
-  const aiSource = aiRes?.ok ? (aiRes.source === "missing" ? "live" : aiRes.source) : "error";
-  const statusSource = statusRes?.ok ? statusRes.source : "error";
+  useEffect(() => {
+    async function fetchStatus() {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const res = await fetch("/api/rpc/status", { cache: "no-store" });
+        const json = await res.json();
+        
+        if (json.ok && json.data) {
+          setStatus(json.data);
+          setSource("live");
+        } else {
+          setError(json.error || json.detail || "Failed to fetch status");
+          setSource("error");
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Network error");
+        setSource("error");
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchStatus();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const status = statusRes?.ok ? statusRes.status : undefined;
-  const rawStatus = statusRes?.ok ? statusRes.rawStatus : (statusRes && 'rawStatus' in statusRes ? statusRes.rawStatus : null);
-  const ippanTime = statusRes?.ok ? statusRes.ippanTime : null;
-  const hashTimerData = statusRes?.ok ? statusRes.hashTimerData : null;
   const validatorIds = status?.consensus?.validator_ids ?? [];
   const { source: validatorSource, count: validatorCount } = getValidatorSource(status);
-  const peerCount = status?.peer_count ?? (peersRes?.peers?.length ?? 0);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Status" description="Loading status from DevNet RPC..." />
+        <Card>
+          <div className="animate-pulse space-y-4">
+            <div className="h-4 bg-slate-800 rounded w-3/4"></div>
+            <div className="h-4 bg-slate-800 rounded w-1/2"></div>
+            <div className="h-4 bg-slate-800 rounded w-2/3"></div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Status" description="Operator / cluster view (health + consensus + AI) from devnet RPC" />
+      <PageHeader 
+        title="Status" 
+        description="Operator / cluster view from devnet RPC"
+        actions={
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50"
+          >
+            Refresh
+          </button>
+        }
+      />
+
+      {error && (
+        <div className="rounded-lg border border-red-800/50 bg-red-900/20 p-4">
+          <p className="text-red-300">{error}</p>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* Gateway Probe */}
-        <Card title="Gateway Probe" description="Connection details" headerSlot={<SourceBadge source={statusSource} />}>
+        <Card title="Gateway Probe" description="Connection details" headerSlot={<SourceBadge source={source} />}>
           <div className="space-y-3 text-sm text-slate-200">
-            <KeyValue label="Connected to" value={IPPAN_RPC_BASE} />
+            <KeyValue label="Status" value={status ? "Connected" : "Disconnected"} />
             <KeyValue label="Last fetch" value={new Date().toLocaleTimeString()} />
             {status && (
               <KeyValue label="Requests Served" value={status.requests_served?.toLocaleString() ?? "—"} />
             )}
-            <KeyValue label="Gateway Status" value={statusRes?.ok ? "Online" : "Unreachable"} />
           </div>
         </Card>
 
-        <Card title="Node health" description="From /health" headerSlot={<SourceBadge source={healthSource} />}>
-          {healthRes?.ok && healthRes.health ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <HealthRow label="Consensus" ok={healthRes.health.consensus} detail="consensus" />
-              <HealthRow label="RPC" ok={healthRes.health.rpc} detail="rpc" />
-              <HealthRow label="Storage" ok={healthRes.health.storage} detail="storage" />
-              <HealthRow label="DHT files" ok={healthRes.health.dhtFile?.healthy ?? false} detail={`mode: ${healthRes.health.dhtFile?.mode ?? "unknown"}`} />
-              <HealthRow label="DHT handles" ok={healthRes.health.dhtHandle?.healthy ?? false} detail={`mode: ${healthRes.health.dhtHandle?.mode ?? "unknown"}`} />
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
-              <p className="text-sm text-slate-400">
-                {healthRes && "errorCode" in healthRes && healthRes.errorCode === "endpoint_not_available"
-                  ? "DevNet feature — Health endpoint not yet exposed"
-                  : healthRes?.ok
-                    ? "Health unavailable."
-                    : "Health data unavailable — gateway error"}
-              </p>
-            </div>
-          )}
-        </Card>
-
-        <Card title="Node Status" description="From /status" headerSlot={<SourceBadge source={statusSource} />}>
+        {/* Node Status */}
+        <Card title="Node Status" description="From /status" headerSlot={<SourceBadge source={source} />}>
           {status ? (
             <div className="space-y-3 text-sm text-slate-200">
               <div className="flex items-center justify-between">
@@ -97,65 +152,36 @@ export default async function StatusPage() {
               <KeyValue label="Version" value={status.version ?? "—"} />
               <KeyValue label="Uptime" value={formatUptime(status.uptime_seconds)} />
               <KeyValue label="Peer Count" value={status.peer_count?.toString() ?? "—"} />
-              <KeyValue 
-                label="Mempool Size" 
-                value={
-                  status.mempool_size == null
-                    ? "Not exposed"
-                    : status.mempool_size.toString()
-                } 
-              />
+              <KeyValue label="Mempool Size" value={status.mempool_size?.toString() ?? "Not exposed"} />
               <KeyValue label="Consensus Round" value={status.consensus?.round != null ? `#${status.consensus.round}` : "—"} />
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Validators</span>
-                  <span className="font-semibold text-slate-100">{validatorCount}</span>
-                </div>
-                <ValidatorSourceBadge source={validatorSource} />
-              </div>
-              <p className="text-xs text-slate-500">
-                Status reflects this explorer&apos;s connected RPC node view.
-              </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
-              <p className="text-sm text-slate-400">
-                {statusRes?.ok ? "Status unavailable." : "Node status unavailable — gateway error"}
-              </p>
-            </div>
+            <p className="text-sm text-slate-400">Status unavailable</p>
           )}
         </Card>
 
-        <Card title="AI status" description="From /status AI section" headerSlot={<SourceBadge source={statusSource} />}>
+        {/* Validators */}
+        <Card title="Validators" headerSlot={<ValidatorSourceBadge source={validatorSource} />}>
+          <div className="space-y-3 text-sm text-slate-200">
+            <div className="text-3xl font-semibold text-emerald-100">{validatorCount}</div>
+            <p className="text-xs text-slate-500">Active validators in consensus</p>
+          </div>
+        </Card>
+
+        {/* AI Status - from status.ai, NOT separate endpoint */}
+        <Card title="AI Status" description="From /status.ai" headerSlot={<SourceBadge source={source} />}>
           {status?.ai ? (
-            <div className="space-y-2">
+            <div className="space-y-2 text-sm">
               <StatusPill status={status.ai.using_stub ? "warn" : "ok"} />
               <KeyValue label="AI Enabled" value={status.ai.enabled ? "Yes" : "No"} />
               <KeyValue label="Consensus Mode" value={status.ai.consensus_mode ?? "—"} />
               <KeyValue label="Using Stub" value={status.ai.using_stub ? "Yes" : "No"} />
               <KeyValue label="Model Version" value={status.ai.model_version ?? "—"} />
-              <p className="text-sm text-slate-400 mt-2">Model hash</p>
-              <p className="font-mono text-xs text-slate-50 break-all">{status.ai.model_hash ?? "—"}</p>
-              {status.ai.shadow_loaded && (
-                <>
-                  <p className="text-sm text-slate-400 mt-2">Shadow model hash</p>
-                  <p className="font-mono text-xs text-slate-50 break-all">{status.ai.shadow_model_hash ?? "—"}</p>
-                </>
-              )}
-            </div>
-          ) : aiRes && !aiRes.ok ? (
-            <p className="text-sm text-slate-400">{aiRes.error ?? "AI status unavailable"}</p>
-          ) : aiRes && 'aiAvailable' in aiRes && aiRes.aiAvailable && aiRes.ai ? (
-            <div className="space-y-2">
-              <StatusPill status={aiRes.ai.usingStub ? "warn" : "ok"} />
-              <p className="text-sm text-slate-400">Model hash</p>
-              <p className="font-mono text-base text-slate-50 break-all">{aiRes.ai.modelHash}</p>
-              <p className="text-xs text-slate-500">Mode: {aiRes.ai.mode}</p>
+              <p className="text-xs text-slate-400 mt-2">Model hash</p>
+              <p className="font-mono text-xs text-slate-300 break-all">{status.ai.model_hash ?? "—"}</p>
             </div>
           ) : (
-            <p className="text-sm text-slate-400">
-              {aiRes && 'source' in aiRes && aiRes.source === "missing" && 'message' in aiRes ? (aiRes as any).message : "AI status unavailable."}
-            </p>
+            <p className="text-sm text-slate-400">AI status not available in /status response</p>
           )}
         </Card>
       </div>
@@ -163,169 +189,60 @@ export default async function StatusPage() {
       {/* Validator Identity Panel */}
       <Card 
         title="Validator Identities" 
-        description="Validator IDs from /status with duplicate detection"
+        description="Validator IDs from /status"
         headerSlot={<ValidatorSourceBadge source={validatorSource} />}
       >
-        {status ? (
+        {status && validatorIds.length > 0 ? (
           <ValidatorIdentityPanel 
             validatorIds={validatorIds}
             selfId={status.consensus?.self_id}
             reportedValidatorCount={validatorCount}
           />
         ) : (
-          <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
-            <p className="text-sm text-slate-400">
-              {validatorSource === "unknown" 
-                ? "Node RPC lacks validator visibility — consensus.validator_ids not available"
-                : "Validator identity data unavailable — gateway error"}
-            </p>
-          </div>
+          <p className="text-sm text-slate-400">
+            {validatorSource === "unknown" 
+              ? "Validator IDs not available in response"
+              : "No validator data"}
+          </p>
         )}
       </Card>
 
-      {/* Peer Identity Section */}
-      <Card
-        title="Peer Identities"
-        description="Peer IDs from /peers endpoint"
-        headerSlot={<SourceBadge source={peersRes?.ok ? peersRes.source : "error"} />}
-      >
-        {peersRes?.ok && peersRes.peers.length > 0 ? (
+      {/* Peer List */}
+      <Card title="Connected Peers" headerSlot={<SourceBadge source={source} />}>
+        {status?.peers && status.peers.length > 0 ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-400">Total peers:</span>
-              <span className="text-sm font-semibold text-slate-100">{peersRes.peers.length}</span>
+              <span className="text-sm text-slate-400">Total:</span>
+              <span className="text-sm font-semibold text-slate-100">{status.peers.length}</span>
             </div>
-            <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 overflow-hidden">
-              <div className="px-3 py-2 border-b border-slate-800/70">
-                <span className="text-xs uppercase tracking-wide text-slate-500">Peer IDs</span>
-              </div>
-              <div className="divide-y divide-slate-800/50 max-h-48 overflow-y-auto">
-                {peersRes.peers.map((peer, i) => (
-                  <div key={peer.peer_id || i} className="flex items-center justify-between gap-2 px-3 py-2">
-                    <span className="font-mono text-xs text-slate-300 truncate" title={peer.peer_id}>
-                      {peer.peer_id ? `${peer.peer_id.slice(0, 16)}…${peer.peer_id.slice(-8)}` : peer.addr ?? "unknown"}
+            <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 overflow-hidden max-h-48 overflow-y-auto">
+              <div className="divide-y divide-slate-800/50">
+                {status.peers.slice(0, 20).map((peer, i) => (
+                  <div key={i} className="px-3 py-2">
+                    <span className="font-mono text-xs text-slate-300">
+                      {peer.replace("http://", "").replace("https://", "")}
                     </span>
-                    {peer.agent && (
-                      <span className="text-[10px] text-slate-500 truncate max-w-[120px]" title={peer.agent}>
-                        {peer.agent}
-                      </span>
-                    )}
                   </div>
                 ))}
+                {status.peers.length > 20 && (
+                  <div className="px-3 py-2 text-xs text-slate-500">
+                    ...and {status.peers.length - 20} more
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-slate-800/70 bg-slate-900/30 p-3">
-            <p className="text-sm text-slate-400">
-              {peersRes && !peersRes.ok && 'errorCode' in peersRes && peersRes.errorCode === "endpoint_not_available"
-                ? "/peers endpoint not available on this DevNet"
-                : peersRes?.peers?.length === 0
-                  ? "/peers returned empty — no peer data available"
-                  : !peersRes?.ok 
-                    ? (peersRes && 'error' in peersRes ? peersRes.error : "Unknown error")
-                    : "Peer data unavailable"}
-            </p>
-          </div>
+          <p className="text-sm text-slate-400">
+            {status?.peer_count ? `${status.peer_count} peers (addresses not exposed)` : "No peer data"}
+          </p>
         )}
       </Card>
 
-      {/* IPPAN Time Section - Dedicated time display */}
-      <Card 
-        title="Time & Ordering" 
-        description="IPPAN Time, HashTimers, and ordering fields"
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <IppanTimeCard
-            ippanTime={ippanTime}
-            hashTimerData={hashTimerData}
-            source={statusSource}
-            loading={false}
-          />
-          
-          {/* Time Info Panel */}
-          <div className="space-y-3">
-            <div className="rounded-lg border border-slate-800/70 bg-slate-950/50 p-4">
-              <h4 className="text-sm font-semibold text-slate-200 mb-2">About IPPAN Time</h4>
-              <p className="text-xs text-slate-400 mb-2">
-                IPPAN uses HashTimers for ordering. Time fields in the /status response 
-                indicate the network&apos;s view of time, which may differ from wall clock time.
-              </p>
-              <ul className="text-xs text-slate-500 space-y-1">
-                <li>• <strong className="text-slate-400">IPPAN Time (μs)</strong>: Network time in microseconds</li>
-                <li>• <strong className="text-slate-400">HashTimer</strong>: 64-char hex ordering anchor</li>
-                <li>• <strong className="text-slate-400">Clock Delta</strong>: Difference from local time</li>
-              </ul>
-            </div>
-            
-            {/* Time Source Info */}
-            {ippanTime?.sourceField && (
-              <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 p-3">
-                <p className="text-xs text-emerald-300">
-                  ✓ Time found in field: <code className="bg-slate-900/50 px-1 rounded">{ippanTime.sourceField}</code>
-                </p>
-              </div>
-            )}
-            
-            {!ippanTime?.sourceField && (
-              <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
-                <p className="text-xs text-amber-300">
-                  ⚠ No recognized time field found in /status response
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Check the &quot;All Fields&quot; view below for available time data
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Raw JSON */}
+      <Card title="Raw /status JSON" description="Complete response from API">
+        <JsonViewer data={status || { error: error || "No data" }} />
       </Card>
-
-      {/* Gateway Truth Section */}
-      <GatewayTruth 
-        status={status}
-        fetchTimestamp={Date.now()}
-      />
-
-      {/* Raw Status with All Fields View */}
-      {rawStatus && (
-        <RawStatusViewer
-          data={rawStatus}
-          title="Raw /status JSON"
-          description="Complete response from gateway RPC - includes all fields (known and unknown)"
-          defaultView="collapsed"
-        />
-      )}
-
-      {/* Health and AI Raw Data */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Raw /health JSON">
-          <JsonViewer data={healthRes?.ok && healthRes.health ? healthRes.health : { error: healthRes && 'error' in healthRes ? healthRes.error : "Unavailable" }} />
-        </Card>
-        <Card title="Raw /ai/status JSON">
-          <JsonViewer
-            data={
-              aiRes?.ok && 'aiAvailable' in aiRes
-                ? aiRes.aiAvailable && aiRes.ai
-                  ? aiRes.ai
-                  : { note: aiRes.source === "missing" && 'message' in aiRes ? (aiRes as any).message : "AI status unavailable." }
-                : { error: aiRes && 'error' in aiRes ? aiRes.error : "Unavailable" }
-            }
-          />
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function HealthRow({ label, ok, detail }: { label: string; ok: boolean; detail?: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-slate-800/70 bg-slate-950/50 px-3 py-2">
-      <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-        {detail && <p className="text-xs text-slate-400">{detail}</p>}
-      </div>
-      <StatusPill status={ok ? "ok" : "error"} />
     </div>
   );
 }
