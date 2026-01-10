@@ -102,7 +102,7 @@ export default function IpndhtClient() {
         setSummary(null);
       } else {
         // Partial success - show what we have
-        setSummary(summaryRes.data ?? null);
+        setSummary(summaryRes.ok ? summaryRes.data : null);
         setError(null);
       }
 

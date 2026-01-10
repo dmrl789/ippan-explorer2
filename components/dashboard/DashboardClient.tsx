@@ -25,7 +25,7 @@ interface StatusData {
   consensus?: {
     round?: number | string;
     validator_ids?: string[];
-    validators?: Array<{ id?: string }>;
+    validators?: Record<string, unknown>;
     validator_count?: number;
   };
 }
@@ -261,11 +261,11 @@ export default function DashboardClient() {
       {status && (
         <Card title="Node Info" description="Gateway node details" headerSlot={<SourceBadge source={statusSource} />}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailItem label="Node ID" value={status.node_id} mono />
-            <DetailItem label="Version" value={status.version} />
-            <DetailItem label="Status" value={status.status} />
+            <DetailItem label="Node ID" value={status.node_id ?? "—"} mono />
+            <DetailItem label="Version" value={status.version ?? "—"} />
+            <DetailItem label="Status" value={status.status ?? "—"} />
             <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
-            <DetailItem label="Mempool Size" value={status.mempool_size.toString()} />
+            <DetailItem label="Mempool Size" value={status.mempool_size?.toString() ?? "—"} />
             <DetailItem label="Requests Served" value={(status.requests_served as number)?.toLocaleString() ?? "—"} />
           </div>
         </Card>

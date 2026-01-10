@@ -95,7 +95,9 @@ export default function NetworkPage() {
         }
         setSource("live");
       } else {
-        setError(peersRes.error || statusRes.error || "Failed to fetch peer data");
+        const peersError = !peersRes.ok ? peersRes.error : null;
+        const statusError = !statusRes.ok ? statusRes.error : null;
+        setError(peersError || statusError || "Failed to fetch peer data");
         setSource("error");
       }
       

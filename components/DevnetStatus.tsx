@@ -18,7 +18,7 @@ interface StatusData {
   consensus?: {
     round?: number | string;
     validator_ids?: string[];
-    validators?: Array<{ id?: string }>;
+    validators?: Record<string, unknown>;
     validator_count?: number;
   };
 }
@@ -58,7 +58,7 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
     return {
       ok: false,
       loading: false,
-      error: result.error || "Gateway RPC unavailable",
+      error: !result.ok ? result.error : "Gateway RPC unavailable",
       rpcBase: rawObj?.rpc_base as string | undefined,
     };
   }

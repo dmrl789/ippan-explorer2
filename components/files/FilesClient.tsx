@@ -32,7 +32,7 @@ async function fetchFiles(): Promise<{ ok: boolean; files: FileRecord[]; error?:
   const result = await fetchProxy<FilesResponse>("/ipndht/files?limit=100");
   
   if (!result.ok || !result.data) {
-    return { ok: false, files: [], error: result.error || "Gateway error" };
+    return { ok: false, files: [], error: !result.ok ? result.error : "Gateway error" };
   }
   
   // Handle various response shapes

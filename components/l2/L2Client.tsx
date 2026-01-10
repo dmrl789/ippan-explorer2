@@ -113,10 +113,10 @@ export default function L2Client() {
           </div>
         ) : statusSource === "live" && status ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Detail label="Node ID" value={status.node_id} />
-            <Detail label="Consensus Round" value={`#${status.consensus.round}`} />
-            <Detail label="Validators" value={status.consensus.validator_ids?.length ?? 0} />
-            <Detail label="Peers" value={status.peer_count} />
+            <Detail label="Node ID" value={status.node_id ?? "—"} />
+            <Detail label="Consensus Round" value={status.consensus?.round ? `#${status.consensus.round}` : "—"} />
+            <Detail label="Validators" value={status.consensus?.validator_ids?.length ?? 0} />
+            <Detail label="Peers" value={status.peer_count ?? 0} />
           </div>
         ) : (
           <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">

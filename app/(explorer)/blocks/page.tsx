@@ -47,6 +47,7 @@ export default function BlocksPage() {
   // Enhanced debug state
   const [blocksSource, setBlocksSource] = useState<string | null>(null);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const [hydratedCount, setHydratedCount] = useState<number>(0);
 
   // Fetch blocks using the simplified client fetch helper
   const fetchBlocks = useCallback(async () => {
@@ -56,15 +57,16 @@ export default function BlocksPage() {
 
     const result = await fetchProxy<BlocksApiResponse>("/blocks?limit=25");
     
-    setDebugInfo(`Fetch complete: ok=${result.ok}, hasData=${!!result.data}`);
-
     if (!result.ok) {
+      setDebugInfo(`Fetch failed: ${result.error}`);
       setError(result.error);
       setSource("error");
       setBlocks([]);
       setLoading(false);
       return;
     }
+
+    setDebugInfo(`Fetch complete: ok=${result.ok}, hasData=${!!result.data}`);
 
     const data = result.data;
     
@@ -76,6 +78,7 @@ export default function BlocksPage() {
     setBlocksSource(data.source ?? null);
     setFallbackReason(data.fallback_reason ?? null);
     setWarnings(data.warnings ?? []);
+    setHydratedCount(data.hydrated_blocks_count ?? 0);
 
     // Normalize blocks
     const normalizedBlocks = rawBlocks.map((b): BlockSummary => ({
