@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { toMs } from "@/lib/time";
 
 type BlockRow = {
   block_hash: string;
   tx_count?: number;
-  timestamp?: number;
+  timestamp?: number | string;
   round_id?: number | string;
   prev_block_hash?: string;
+  ippan_time_ms?: number;
 };
 
 export type BlocksApiResponse = {
@@ -23,29 +24,47 @@ export type BlocksApiResponse = {
 };
 
 /**
- * Unwrap the proxy response - handles both envelope and plain formats.
+ * Parse blocks API response - handles BOTH envelope and plain formats.
+ * 
+ * Envelope format: { ok, data: { ok, blocks: [...] } }
+ * Plain format:    { ok, blocks: [...] }
  */
-function unwrapBlocks(json: unknown): BlocksApiResponse | null {
-  if (!json || typeof json !== "object") return null;
+function parseBlocksResponse(json: unknown): BlocksApiResponse | null {
+  if (!json || typeof json !== "object") {
+    console.warn("[BlocksClient] Response is not an object:", json);
+    return null;
+  }
   
   const obj = json as Record<string, unknown>;
   
-  // Check if request failed
-  if (obj.ok === false) return null;
-  
-  // Envelope format: { ok, data: { blocks: [...] } }
+  // Envelope format: unwrap { data: { blocks: [...] } }
   if ("data" in obj && obj.data && typeof obj.data === "object") {
     const data = obj.data as Record<string, unknown>;
-    if ("blocks" in data) {
-      return data as unknown as BlocksApiResponse;
+    if (Array.isArray(data.blocks)) {
+      console.log("[BlocksClient] Parsed envelope format, blocks:", data.blocks?.length);
+      return {
+        ok: data.ok !== false,
+        blocks: data.blocks as BlockRow[],
+        source: data.source as string | undefined,
+        fallback_reason: data.fallback_reason as string | null | undefined,
+        warnings: data.warnings as string[] | undefined,
+      };
     }
   }
   
   // Plain format: { ok, blocks: [...] }
-  if ("blocks" in obj && Array.isArray(obj.blocks)) {
-    return obj as unknown as BlocksApiResponse;
+  if (Array.isArray(obj.blocks)) {
+    console.log("[BlocksClient] Parsed plain format, blocks:", obj.blocks?.length);
+    return {
+      ok: obj.ok !== false,
+      blocks: obj.blocks as BlockRow[],
+      source: obj.source as string | undefined,
+      fallback_reason: obj.fallback_reason as string | null | undefined,
+      warnings: obj.warnings as string[] | undefined,
+    };
   }
   
+  console.warn("[BlocksClient] Could not parse response, no blocks array found:", Object.keys(obj));
   return null;
 }
 
@@ -63,39 +82,69 @@ export default function BlocksClient({ initial }: BlocksClientProps) {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(!initial);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setIsRefreshing(true);
+    setRefreshError(null);
+
     try {
       const res = await fetch("/api/rpc/blocks?limit=25", { cache: "no-store" });
-      const json = await res.json();
-      const parsed = unwrapBlocks(json);
       
-      if (!res.ok || !parsed) {
+      // IMPORTANT: always parse JSON, even on error responses
+      let json: unknown;
+      try {
+        json = await res.json();
+      } catch (parseErr) {
+        throw new Error(`JSON parse error: ${parseErr}`);
+      }
+
+      // Check HTTP status first
+      if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      
-      setData(parsed);
+
+      // Parse the response (handles both envelope and plain formats)
+      const payload = parseBlocksResponse(json);
+
+      // Validate the payload structure
+      if (!payload) {
+        throw new Error("Could not parse blocks response");
+      }
+      if (!payload.ok) {
+        throw new Error("API returned ok: false");
+      }
+      if (!Array.isArray(payload.blocks)) {
+        throw new Error("payload.blocks is not an array");
+      }
+
+      // Success! Update data
+      setData(payload);
       setRefreshError(null);
-    } catch (e) {
+      console.log("[BlocksClient] Refresh success, got", payload.blocks.length, "blocks");
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : "unknown error";
+      console.error("[BlocksClient] Refresh error:", errorMsg);
       // IMPORTANT: do NOT wipe existing data; just show a warning banner
-      setRefreshError(e instanceof Error ? e.message : "refresh failed");
+      setRefreshError(errorMsg);
     } finally {
+      // THIS is critical: ALWAYS exit loading state, even on error
       setIsRefreshing(false);
+      setIsInitialLoad(false);
     }
-  }
+  }, []);
 
   // Initial refresh on mount + auto-refresh interval
   useEffect(() => {
     // If SSR already provided data, we still refresh once to confirm
     refresh();
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(refresh, 10000);
     return () => clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, refresh]);
 
   const blocks = data?.blocks ?? [];
   const isFallback = data?.source === "fallback_tx_recent";
@@ -174,7 +223,11 @@ export default function BlocksClient({ initial }: BlocksClientProps) {
 
         {blocks.length === 0 ? (
           <div className="p-4 text-sm text-slate-400">
-            {data === null ? "Loading blocks..." : "No blocks yet"}
+            {isInitialLoad && isRefreshing
+              ? "Loading blocks..."
+              : refreshError
+                ? `Error: ${refreshError}`
+                : "No blocks available"}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -190,7 +243,11 @@ export default function BlocksClient({ initial }: BlocksClientProps) {
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {blocks.map((block) => {
-                  const tsMs = toMs(block.timestamp);
+                  // Handle timestamp as string or number (API may return either)
+                  const ts = typeof block.timestamp === "string" 
+                    ? parseInt(block.timestamp, 10) 
+                    : block.timestamp;
+                  const tsMs = toMs(ts);
                   return (
                     <tr key={block.block_hash} className="hover:bg-slate-900/30">
                       <td className="px-4 py-2">
