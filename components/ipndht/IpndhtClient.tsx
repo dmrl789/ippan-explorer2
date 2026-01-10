@@ -6,14 +6,39 @@ import SimpleTable from "@/components/tables/SimpleTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
-import { 
-  fetchRpc, 
-  type IpndhtSummaryData, 
-  type HandleRecord, 
-  type FileRecord, 
-  type HandlesResponse, 
-  type FilesResponse 
-} from "@/lib/clientRpc";
+import { fetchProxy } from "@/lib/clientFetch";
+
+interface IpndhtSummaryData {
+  files: number;
+  handles: number;
+  providers?: number;
+  dht_peers?: number;
+}
+
+interface HandleRecord {
+  handle: string;
+  owner?: string;
+  expires_at?: string;
+}
+
+interface FileRecord {
+  id: string;
+  owner?: string;
+  mime_type?: string;
+  size_bytes?: number;
+  availability?: string;
+  tags?: string[];
+}
+
+interface HandlesResponse {
+  items?: HandleRecord[];
+  handles?: HandleRecord[];
+}
+
+interface FilesResponse {
+  items?: FileRecord[];
+  files?: FileRecord[];
+}
 
 function formatSize(bytes?: number) {
   if (bytes === undefined || bytes === null) return "—";
@@ -52,11 +77,10 @@ export default function IpndhtClient() {
     let alive = true;
 
     async function loadData() {
-      // Use centralized RPC fetch with automatic envelope unwrapping
       const [summaryRes, handlesRes, filesRes] = await Promise.all([
-        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
-        fetchRpc<HandlesResponse>("/ipndht/handles?limit=10"),
-        fetchRpc<FilesResponse>("/ipndht/files?limit=10"),
+        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
+        fetchProxy<HandlesResponse>("/ipndht/handles?limit=10"),
+        fetchProxy<FilesResponse>("/ipndht/files?limit=10"),
       ]);
 
       if (!alive) return;
@@ -78,16 +102,18 @@ export default function IpndhtClient() {
         setSummary(null);
       } else {
         // Partial success - show what we have
-        setSummary(summaryRes.data);
+        setSummary(summaryRes.ok ? summaryRes.data : null);
         setError(null);
       }
 
-      // Set handles and files - data is already unwrapped
+      // Set handles and files
       if (handlesRes.ok && handlesRes.data) {
-        setHandles(handlesRes.data.items ?? []);
+        const hdata = handlesRes.data;
+        setHandles(hdata.items ?? hdata.handles ?? []);
       }
       if (filesRes.ok && filesRes.data) {
-        setFiles(filesRes.data.items ?? []);
+        const fdata = filesRes.data;
+        setFiles(fdata.items ?? fdata.files ?? []);
       }
 
       setLoading(false);

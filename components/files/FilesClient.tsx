@@ -8,18 +8,35 @@ import FileSearchForm from "@/components/forms/FileSearchForm";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
-import { fetchRpc, type FilesResponse, type FileRecord } from "@/lib/clientRpc";
+import { fetchProxy } from "@/lib/clientFetch";
+
+interface FileRecord {
+  id: string;
+  file_id?: string;
+  owner?: string;
+  mime_type?: string;
+  size_bytes?: number;
+  availability?: string;
+  dht_published?: boolean;
+  tags?: string[];
+  meta?: { doctype?: string };
+}
+
+interface FilesResponse {
+  items?: FileRecord[];
+  files?: FileRecord[];
+  total?: number;
+}
 
 async function fetchFiles(): Promise<{ ok: boolean; files: FileRecord[]; error?: string }> {
-  // Use centralized RPC fetch with automatic envelope unwrapping
-  const result = await fetchRpc<FilesResponse>("/ipndht/files?limit=100");
+  const result = await fetchProxy<FilesResponse>("/ipndht/files?limit=100");
   
   if (!result.ok || !result.data) {
-    return { ok: false, files: [], error: result.error || "Gateway error" };
+    return { ok: false, files: [], error: !result.ok ? result.error : "Gateway error" };
   }
   
-  // Handle various formats - data is already unwrapped
-  const items = result.data.items ?? [];
+  // Handle various response shapes
+  const items = result.data.items ?? result.data.files ?? [];
   return { ok: true, files: items };
 }
 

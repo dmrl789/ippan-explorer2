@@ -13,26 +13,25 @@ import { JsonPanel } from "@/components/common/JsonPanel";
 import { type BlockSummary } from "@/lib/normalize";
 import { shortenHash } from "@/lib/format";
 import { IPPAN_RPC_BASE } from "@/lib/rpc";
-import { toMs } from "@/lib/clientRpc";
+import { fetchProxy, toMs } from "@/lib/clientFetch";
 
-// Response type matching the enhanced API
-type BlocksSource = "upstream_blocks" | "fallback_tx_recent";
-type FallbackReason = "blocks_404" | "blocks_error" | "blocks_empty" | null;
-
-interface BlocksResponse {
+// Response type matching the plain /blocks API format
+interface BlocksApiResponse {
   ok: boolean;
-  blocks?: BlockSummary[];
-  // Legacy field for backwards compatibility
-  data?: BlockSummary[];
-  source?: BlocksSource;
-  fallback_reason?: FallbackReason;
+  blocks: Array<{
+    block_hash: string;
+    tx_count?: number;
+    timestamp?: number;
+    round_id?: number | string;
+    prev_block_hash?: string;
+    hash_timer_id?: string;
+  }>;
+  source?: string;
+  fallback_reason?: string | null;
   derived_block_hashes_count?: number;
   hydrated_blocks_count?: number;
-  error?: string;
-  error_code?: string;
-  detail?: string;
-  meta?: Record<string, unknown>;
   warnings?: string[];
+  meta?: Record<string, unknown>;
 }
 
 export default function BlocksPage() {
@@ -40,67 +39,61 @@ export default function BlocksPage() {
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | undefined>();
   const [source, setSource] = useState<"live" | "error">("live");
-  const [meta, setMeta] = useState<Record<string, unknown> | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>("");
   
   // Enhanced debug state
-  const [blocksSource, setBlocksSource] = useState<BlocksSource | null>(null);
-  const [fallbackReason, setFallbackReason] = useState<FallbackReason>(null);
-  const [derivedCount, setDerivedCount] = useState<number>(0);
+  const [blocksSource, setBlocksSource] = useState<string | null>(null);
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   const [hydratedCount, setHydratedCount] = useState<number>(0);
 
-  // Fetch blocks
+  // Fetch blocks using the simplified client fetch helper
   const fetchBlocks = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setDebugInfo("Fetching /api/rpc/blocks...");
 
-    try {
-      const res = await fetch("/api/rpc/blocks?limit=25", {
-        cache: "no-store",
-      });
-
-      const data: BlocksResponse = await res.json();
-
-      // Extract enhanced debug fields
-      setBlocksSource(data.source || null);
-      setFallbackReason(data.fallback_reason || null);
-      setDerivedCount(data.derived_block_hashes_count || 0);
-      setHydratedCount(data.hydrated_blocks_count || 0);
-
-      // Handle both new (blocks) and legacy (data) response formats
-      const rawBlocks = data.blocks || data.data || [];
-
-      if (data.ok) {
-        // Normalize the response data
-        const normalizedBlocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(normalizeBlock);
-        setBlocks(normalizedBlocks);
-        setSource("live");
-        setMeta(data.meta || null);
-        setWarnings(data.warnings || []);
-        // Clear any previous errors when ok is true
-        setError(null);
-        setErrorCode(undefined);
-      } else {
-        setError(data.detail || data.error || "Failed to fetch blocks");
-        setErrorCode(data.error_code);
-        setSource("error");
-        setBlocks([]);
-        setMeta(data.meta || null);
-        setWarnings(data.warnings || []);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error");
-      setErrorCode("FETCH_ERROR");
+    const result = await fetchProxy<BlocksApiResponse>("/blocks?limit=25");
+    
+    if (!result.ok) {
+      setDebugInfo(`Fetch failed: ${result.error}`);
+      setError(result.error);
       setSource("error");
       setBlocks([]);
-      setBlocksSource(null);
-      setFallbackReason(null);
-    } finally {
       setLoading(false);
+      return;
     }
+
+    setDebugInfo(`Fetch complete: ok=${result.ok}, hasData=${!!result.data}`);
+
+    const data = result.data;
+    
+    // Extract blocks from the plain response format
+    const rawBlocks = data.blocks ?? [];
+    setDebugInfo(`Got ${rawBlocks.length} blocks`);
+    
+    // Extract debug info
+    setBlocksSource(data.source ?? null);
+    setFallbackReason(data.fallback_reason ?? null);
+    setWarnings(data.warnings ?? []);
+    setHydratedCount(data.hydrated_blocks_count ?? 0);
+
+    // Normalize blocks
+    const normalizedBlocks = rawBlocks.map((b): BlockSummary => ({
+      block_hash: b.block_hash ?? "",
+      tx_count: b.tx_count,
+      timestamp: b.timestamp?.toString(),
+      ippan_time_ms: toMs(b.timestamp) ?? undefined,
+      round_id: b.round_id,
+      prev_block_hash: b.prev_block_hash,
+      hashtimer: b.hash_timer_id,
+    }));
+
+    setBlocks(normalizedBlocks);
+    setSource("live");
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -157,6 +150,11 @@ export default function BlocksPage() {
         }
       />
 
+      {/* Debug Info (dev only) */}
+      {process.env.NODE_ENV !== "production" && debugInfo && (
+        <div className="text-xs text-slate-500 font-mono">{debugInfo}</div>
+      )}
+
       {/* Fallback Mode Notice */}
       {blocksSource === "fallback_tx_recent" && (
         <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 space-y-2">
@@ -169,24 +167,12 @@ export default function BlocksPage() {
             </p>
           </div>
           <p className="text-xs text-amber-200/70">
-            {fallbackReason === "blocks_404" 
-              ? "The gateway's /blocks endpoint returns 404. Blocks are derived from recent transactions."
-              : warnings[0] || "Primary blocks endpoint unavailable, using transaction-based fallback."}
+            {warnings[0] || "Blocks are derived from recent transactions."}
           </p>
-          {blocks.length === 0 && derivedCount === 0 && (
-            <p className="text-xs text-slate-400 mt-1">
-              No recent transactions with included/finalized status found. The network may be idle or just started.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-3 text-[10px] text-slate-500 mt-2">
-            <span>Source: <code className="text-slate-400">{blocksSource}</code></span>
-            <span>Derived hashes: <code className="text-slate-400">{derivedCount}</code></span>
-            <span>Hydrated: <code className="text-slate-400">{hydratedCount}</code></span>
-          </div>
         </div>
       )}
 
-      {/* Other Warnings (non-fallback related) */}
+      {/* Other Warnings */}
       {blocksSource !== "fallback_tx_recent" && warnings.length > 0 && (
         <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">
           <p className="text-xs font-medium text-amber-300 mb-1">Warnings</p>
@@ -201,7 +187,6 @@ export default function BlocksPage() {
         <RpcErrorBanner
           error={{
             error,
-            errorCode,
             rpcBase: IPPAN_RPC_BASE,
             path: "/blocks",
           }}
@@ -306,68 +291,15 @@ export default function BlocksPage() {
               header: "Time",
               mobilePriority: 6,
               hideOnMobile: true,
-              render: (block) => {
-                // Convert microseconds to milliseconds if needed
-                const tsMs = toMs(block.ippan_time_ms) ?? toMs(block.timestamp as unknown as number);
-                return (
-                  <span className="text-slate-500 text-xs">
-                    {tsMs ? new Date(tsMs).toLocaleString() : "—"}
-                  </span>
-                );
-              },
+              render: (block) => (
+                <span className="text-slate-500 text-xs">
+                  {block.ippan_time_ms ? new Date(block.ippan_time_ms).toLocaleString() : "—"}
+                </span>
+              ),
             },
           ]}
         />
       </Card>
-
-      {/* Meta info */}
-      {meta && (
-        <JsonPanel data={meta} title="Response Metadata" />
-      )}
     </div>
   );
-}
-
-// Normalize API response to BlockSummary
-function normalizeBlock(raw: unknown): BlockSummary {
-  if (!raw || typeof raw !== "object") {
-    return { block_hash: "" };
-  }
-
-  const item = raw as Record<string, unknown>;
-  const header = item.header as Record<string, unknown> | undefined;
-
-  // Get raw timestamp (may be in microseconds)
-  const rawTimestamp = item.timestamp ?? header?.timestamp;
-  const rawIppanTimeMs = item.ippan_time_ms ?? header?.ippan_time_ms;
-  
-  // Convert to milliseconds if needed
-  const normalizedMs = toMs(rawIppanTimeMs as number) ?? toMs(rawTimestamp as number);
-
-  return {
-    block_hash:
-      (item.block_hash as string) ??
-      (item.hash as string) ??
-      (header?.block_hash as string) ??
-      (item.id as string) ??
-      "",
-    prev_block_hash:
-      (header?.prev_block_hash as string) ??
-      (item.prev_block_hash as string) ??
-      (item.parent_hash as string),
-    round_id:
-      (item.round_id as number | string) ??
-      (header?.round_id as number | string),
-    hashtimer:
-      (item.hash_timer_id as string) ??
-      (item.hashtimer as string) ??
-      (header?.hash_timer_id as string),
-    tx_count:
-      (item.tx_count as number) ??
-      (Array.isArray(item.tx_ids) ? item.tx_ids.length : undefined) ??
-      (Array.isArray(item.transactions) ? item.transactions.length : undefined),
-    timestamp:
-      typeof rawTimestamp === "string" ? rawTimestamp : undefined,
-    ippan_time_ms: normalizedMs ?? undefined,
-  };
 }

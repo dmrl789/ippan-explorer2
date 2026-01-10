@@ -6,7 +6,23 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { L2_APPS, type L2App } from "@/lib/l2Config";
-import { fetchRpc, type StatusData, type IpndhtSummaryData } from "@/lib/clientRpc";
+import { fetchProxy } from "@/lib/clientFetch";
+
+interface StatusData {
+  node_id?: string;
+  peer_count?: number;
+  consensus?: {
+    round?: number | string;
+    validator_ids?: string[];
+  };
+}
+
+interface IpndhtSummaryData {
+  files: number;
+  handles: number;
+  providers?: number;
+  dht_peers?: number;
+}
 
 function categoryLabel(category: L2App["category"]) {
   switch (category) {
@@ -46,15 +62,14 @@ export default function L2Client() {
     let alive = true;
 
     async function loadData() {
-      // Use centralized RPC fetch with automatic envelope unwrapping
       const [statusRes, ipndhtRes] = await Promise.all([
-        fetchRpc<StatusData>("/status"),
-        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
+        fetchProxy<StatusData>("/status"),
+        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
       ]);
 
       if (!alive) return;
 
-      // Status - data is already unwrapped by fetchRpc
+      // Status
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
         setStatusSource("live");
@@ -62,7 +77,7 @@ export default function L2Client() {
         setStatusSource("error");
       }
 
-      // IPNDHT - data is already unwrapped
+      // IPNDHT
       if (ipndhtRes.ok && ipndhtRes.data) {
         setIpndht(ipndhtRes.data);
         setIpndhtSource("live");
@@ -98,10 +113,10 @@ export default function L2Client() {
           </div>
         ) : statusSource === "live" && status ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Detail label="Node ID" value={status.node_id} />
-            <Detail label="Consensus Round" value={`#${status.consensus.round}`} />
-            <Detail label="Validators" value={status.consensus.validator_ids?.length ?? 0} />
-            <Detail label="Peers" value={status.peer_count} />
+            <Detail label="Node ID" value={status.node_id ?? "—"} />
+            <Detail label="Consensus Round" value={status.consensus?.round ? `#${status.consensus.round}` : "—"} />
+            <Detail label="Validators" value={status.consensus?.validator_ids?.length ?? 0} />
+            <Detail label="Peers" value={status.peer_count ?? 0} />
           </div>
         ) : (
           <div className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">

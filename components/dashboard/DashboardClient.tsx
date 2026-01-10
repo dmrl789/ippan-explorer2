@@ -10,14 +10,39 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
-import { 
-  fetchRpc, 
-  normalizePeers,
-  type StatusData, 
-  type IpndhtSummaryData, 
-  type PeerInfo,
-  type PeersData,
-} from "@/lib/clientRpc";
+import { fetchProxy } from "@/lib/clientFetch";
+
+// Response types
+interface StatusData {
+  status?: string;
+  node_id?: string;
+  version?: string;
+  peer_count?: number;
+  uptime_seconds?: number;
+  mempool_size?: number;
+  requests_served?: number;
+  network_active?: boolean;
+  consensus?: {
+    round?: number | string;
+    validator_ids?: string[];
+    validators?: Record<string, unknown>;
+    validator_count?: number;
+  };
+}
+
+interface IpndhtSummaryData {
+  files: number;
+  handles: number;
+  providers?: number;
+  dht_peers?: number;
+}
+
+interface PeerInfo {
+  peer_id: string;
+  address: string;
+}
+
+type PeersData = Array<{ peer_id?: string; addr?: string; address?: string }> | { peers?: unknown[] };
 
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -59,25 +84,26 @@ export default function DashboardClient() {
     let alive = true;
 
     async function loadData() {
-      // Use centralized RPC fetch with automatic envelope unwrapping
       const [statusRes, ipndhtRes, peersRes] = await Promise.all([
-        fetchRpc<StatusData>("/status"),
-        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
-        fetchRpc<PeersData>("/peers"),
+        fetchProxy<StatusData>("/status"),
+        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
+        fetchProxy<PeersData>("/peers"),
       ]);
 
       if (!alive) return;
 
-      // Status - data is already unwrapped by fetchRpc
+      // Status
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
         setStatusSource("live");
-        if (statusRes.rpcBase) setRpcBase(statusRes.rpcBase);
+        // Extract rpc_base from raw response if available
+        const raw = statusRes.raw as Record<string, unknown> | undefined;
+        if (raw?.rpc_base) setRpcBase(String(raw.rpc_base));
       } else {
         setStatusSource("error");
       }
 
-      // IPNDHT - data is already unwrapped
+      // IPNDHT
       if (ipndhtRes.ok && ipndhtRes.data) {
         setIpndht(ipndhtRes.data);
         setIpndhtSource("live");
@@ -87,7 +113,21 @@ export default function DashboardClient() {
 
       // Peers - normalize the various response formats
       if (peersRes.ok && peersRes.data) {
-        const normalizedPeers = normalizePeers(peersRes.data);
+        const pdata = peersRes.data;
+        let arr: unknown[] = [];
+        if (Array.isArray(pdata)) {
+          arr = pdata;
+        } else if (pdata && typeof pdata === "object" && "peers" in pdata) {
+          arr = (pdata.peers as unknown[]) ?? [];
+        }
+        const normalizedPeers: PeerInfo[] = arr.map((p, i) => {
+          if (typeof p === "string") return { peer_id: `peer-${i + 1}`, address: p };
+          const obj = p as Record<string, unknown>;
+          return {
+            peer_id: String(obj.peer_id ?? obj.id ?? `peer-${i + 1}`),
+            address: String(obj.address ?? obj.addr ?? "unknown"),
+          };
+        });
         setPeers(normalizedPeers);
         setPeersSource("live");
       } else {
@@ -221,11 +261,11 @@ export default function DashboardClient() {
       {status && (
         <Card title="Node Info" description="Gateway node details" headerSlot={<SourceBadge source={statusSource} />}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <DetailItem label="Node ID" value={status.node_id} mono />
-            <DetailItem label="Version" value={status.version} />
-            <DetailItem label="Status" value={status.status} />
+            <DetailItem label="Node ID" value={status.node_id ?? "—"} mono />
+            <DetailItem label="Version" value={status.version ?? "—"} />
+            <DetailItem label="Status" value={status.status ?? "—"} />
             <DetailItem label="Network Active" value={status.network_active ? "Yes" : "No"} />
-            <DetailItem label="Mempool Size" value={status.mempool_size.toString()} />
+            <DetailItem label="Mempool Size" value={status.mempool_size?.toString() ?? "—"} />
             <DetailItem label="Requests Served" value={(status.requests_served as number)?.toLocaleString() ?? "—"} />
           </div>
         </Card>
