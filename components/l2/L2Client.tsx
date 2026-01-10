@@ -6,7 +6,23 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { L2_APPS, type L2App } from "@/lib/l2Config";
-import { fetchRpc, type StatusData, type IpndhtSummaryData } from "@/lib/clientRpc";
+import { fetchProxy } from "@/lib/clientFetch";
+
+interface StatusData {
+  node_id?: string;
+  peer_count?: number;
+  consensus?: {
+    round?: number | string;
+    validator_ids?: string[];
+  };
+}
+
+interface IpndhtSummaryData {
+  files: number;
+  handles: number;
+  providers?: number;
+  dht_peers?: number;
+}
 
 function categoryLabel(category: L2App["category"]) {
   switch (category) {
@@ -46,15 +62,14 @@ export default function L2Client() {
     let alive = true;
 
     async function loadData() {
-      // Use centralized RPC fetch with automatic envelope unwrapping
       const [statusRes, ipndhtRes] = await Promise.all([
-        fetchRpc<StatusData>("/status"),
-        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
+        fetchProxy<StatusData>("/status"),
+        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
       ]);
 
       if (!alive) return;
 
-      // Status - data is already unwrapped by fetchRpc
+      // Status
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
         setStatusSource("live");
@@ -62,7 +77,7 @@ export default function L2Client() {
         setStatusSource("error");
       }
 
-      // IPNDHT - data is already unwrapped
+      // IPNDHT
       if (ipndhtRes.ok && ipndhtRes.data) {
         setIpndht(ipndhtRes.data);
         setIpndhtSource("live");

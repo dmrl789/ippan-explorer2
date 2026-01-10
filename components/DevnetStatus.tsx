@@ -3,7 +3,25 @@
 import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { getValidatorSource, type ValidatorSource } from "@/components/common/ValidatorSourceBadge";
-import { fetchRpc, type StatusData } from "@/lib/clientRpc";
+import { fetchProxy } from "@/lib/clientFetch";
+
+// Status response type
+interface StatusData {
+  status?: string;
+  node_id?: string;
+  version?: string;
+  peer_count?: number;
+  uptime_seconds?: number;
+  mempool_size?: number;
+  requests_served?: number;
+  network_active?: boolean;
+  consensus?: {
+    round?: number | string;
+    validator_ids?: string[];
+    validators?: Array<{ id?: string }>;
+    validator_count?: number;
+  };
+}
 
 /**
  * DevNet status derived from the single canonical RPC gateway.
@@ -29,26 +47,24 @@ interface GatewayStatus {
   uptimeSeconds?: number;
   mempoolSize?: number;
   rpcBase?: string;
-  lastSuccessTs?: number;
-  consecutiveFailures?: number;
 }
 
 async function fetchGatewayStatus(): Promise<GatewayStatus> {
-  // Use centralized RPC fetch helper with automatic envelope unwrapping
-  const result = await fetchRpc<StatusData>("/status");
+  const result = await fetchProxy<StatusData>("/status");
 
   // Handle proxy/network error
   if (!result.ok || !result.data) {
+    const rawObj = result.raw as Record<string, unknown> | undefined;
     return {
       ok: false,
       loading: false,
       error: result.error || "Gateway RPC unavailable",
-      errorCode: result.errorCode,
-      rpcBase: result.rpcBase,
+      rpcBase: rawObj?.rpc_base as string | undefined,
     };
   }
 
   const data = result.data;
+  const rawObj = result.raw as Record<string, unknown> | undefined;
 
   // Validate we got a proper status response (must have node_id)
   if (!data.node_id) {
@@ -57,7 +73,7 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
       loading: false,
       error: "Invalid response from gateway (missing node_id)",
       errorCode: "INVALID_RESPONSE",
-      rpcBase: result.rpcBase,
+      rpcBase: rawObj?.rpc_base as string | undefined,
     };
   }
 
@@ -78,7 +94,7 @@ async function fetchGatewayStatus(): Promise<GatewayStatus> {
     validatorCountSource,
     uptimeSeconds: typeof data.uptime_seconds === "number" ? data.uptime_seconds : undefined,
     mempoolSize: typeof data.mempool_size === "number" ? data.mempool_size : undefined,
-    rpcBase: result.rpcBase,
+    rpcBase: rawObj?.rpc_base as string | undefined,
   };
 }
 
