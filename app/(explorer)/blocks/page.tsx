@@ -1,5 +1,5 @@
-import BlocksClient, { type BlocksApiResponse } from "@/components/blocks/BlocksClient";
-import { getServerOrigin } from "@/lib/serverOrigin";
+import BlocksClient from "@/components/blocks/BlocksClient";
+import { getBlocksWithFallback, type BlocksApiResponse } from "@/lib/blocksService";
 import { PageHeader } from "@/components/ui/PageHeader";
 import Link from "next/link";
 import { toMs } from "@/lib/time";
@@ -7,92 +7,6 @@ import { toMs } from "@/lib/time";
 // Force dynamic rendering - no caching
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-/**
- * Parse blocks response - handles BOTH envelope and plain formats.
- * 
- * Envelope format: { ok, data: { ok, blocks: [...] } }
- * Plain format:    { ok, blocks: [...] }
- */
-function parseBlocksResponse(json: unknown): BlocksApiResponse | null {
-  if (!json || typeof json !== "object") {
-    console.error("[SSR] Response is not an object");
-    return null;
-  }
-  
-  const obj = json as Record<string, unknown>;
-  
-  // Envelope format: unwrap { data: { blocks: [...] } }
-  if ("data" in obj && obj.data && typeof obj.data === "object") {
-    const data = obj.data as Record<string, unknown>;
-    if (Array.isArray(data.blocks)) {
-      console.log("[SSR] Parsed envelope format, blocks:", data.blocks?.length);
-      return {
-        ok: data.ok !== false,
-        blocks: data.blocks as BlocksApiResponse["blocks"],
-        source: data.source as string | undefined,
-        fallback_reason: data.fallback_reason as string | null | undefined,
-        warnings: data.warnings as string[] | undefined,
-      };
-    }
-  }
-  
-  // Plain format: { ok, blocks: [...] }
-  if (Array.isArray(obj.blocks)) {
-    console.log("[SSR] Parsed plain format, blocks:", obj.blocks?.length);
-    return {
-      ok: obj.ok !== false,
-      blocks: obj.blocks as BlocksApiResponse["blocks"],
-      source: obj.source as string | undefined,
-      fallback_reason: obj.fallback_reason as string | null | undefined,
-      warnings: obj.warnings as string[] | undefined,
-    };
-  }
-  
-  console.error("[SSR] Could not parse response, no blocks array found");
-  return null;
-}
-
-/**
- * Fetch initial blocks data on the server.
- * This ensures the page shows content even before client JS hydrates.
- */
-async function getInitialBlocks(): Promise<BlocksApiResponse | null> {
-  try {
-    const origin = getServerOrigin();
-    const url = `${origin}/api/rpc/blocks?limit=25`;
-    console.log("[SSR] Fetching blocks from:", url);
-    
-    const res = await fetch(url, {
-      cache: "no-store",
-      next: { revalidate: 0 },
-    });
-    
-    if (!res.ok) {
-      console.error(`[SSR] Blocks fetch failed: HTTP ${res.status}`);
-      return null;
-    }
-    
-    const json = await res.json();
-    const parsed = parseBlocksResponse(json);
-    
-    if (!parsed) {
-      console.error("[SSR] Blocks response could not be parsed");
-      return null;
-    }
-    
-    if (!parsed.ok) {
-      console.error("[SSR] Blocks response ok: false");
-      return null;
-    }
-    
-    console.log("[SSR] Successfully loaded", parsed.blocks?.length ?? 0, "blocks");
-    return parsed;
-  } catch (err) {
-    console.error("[SSR] Blocks fetch error:", err);
-    return null;
-  }
-}
 
 function shortenHash(hash: string, len = 8): string {
   if (!hash || hash.length <= len * 2) return hash || "—";
@@ -169,12 +83,40 @@ function SSRBlockList({ blocks }: { blocks: BlocksApiResponse["blocks"] }) {
 /**
  * Blocks page with SSR initial data.
  * 
+ * KEY FIX: This page now calls getBlocksWithFallback() DIRECTLY instead of
+ * fetching via HTTP to /api/rpc/blocks. This eliminates the "fetch myself
+ * over HTTP" problem that causes SSR to fail on Vercel serverless.
+ * 
  * The page renders blocks immediately from SSR, then the client component
- * takes over for auto-refresh polling. This ensures content is visible
- * even if client JS fails to hydrate.
+ * takes over for auto-refresh polling.
  */
 export default async function BlocksPage() {
-  const initial = await getInitialBlocks();
+  console.log("[BlocksPage] SSR: calling getBlocksWithFallback directly (no HTTP self-fetch)");
+  
+  let initial: BlocksApiResponse | null = null;
+  
+  try {
+    initial = await getBlocksWithFallback(25);
+    console.log(`[BlocksPage] SSR: got ${initial.blocks?.length ?? 0} blocks (${initial.source})`);
+  } catch (err) {
+    console.error("[BlocksPage] SSR: getBlocksWithFallback error:", err);
+  }
+
+  // Convert to client-compatible format (the client component expects a simpler type)
+  const clientInitial = initial ? {
+    ok: initial.ok,
+    blocks: initial.blocks.map(b => ({
+      block_hash: b.block_hash,
+      prev_block_hash: b.prev_block_hash,
+      round_id: b.round_id,
+      tx_count: b.tx_count,
+      timestamp: b.timestamp,
+      ippan_time_ms: b.ippan_time_ms,
+    })),
+    source: initial.source,
+    fallback_reason: initial.fallback_reason,
+    warnings: initial.warnings,
+  } : null;
 
   return (
     <div className="space-y-6">
@@ -183,17 +125,18 @@ export default async function BlocksPage() {
         description="Latest blocks from DevNet"
       />
       
-      {/* SSR debug info - always show in production for debugging */}
+      {/* SSR debug info - always show for debugging */}
       <div className="text-xs text-slate-600 font-mono">
-        SSR: {initial ? `${initial.blocks?.length ?? 0} blocks loaded` : "no initial data"} 
+        SSR: {initial ? `${initial.blocks?.length ?? 0} blocks` : "no data"} 
         {initial?.source ? ` (${initial.source})` : ""}
+        {initial?.fallback_reason ? ` [${initial.fallback_reason}]` : ""}
       </div>
       
       {/* SSR fallback for no-JS environments */}
       <SSRBlockList blocks={initial?.blocks ?? []} />
       
       {/* Client component for interactive features */}
-      <BlocksClient initial={initial} />
+      <BlocksClient initial={clientInitial} />
     </div>
   );
 }
