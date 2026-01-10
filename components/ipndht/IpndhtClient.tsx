@@ -6,68 +6,14 @@ import SimpleTable from "@/components/tables/SimpleTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
-
-// Types for proxy responses
-interface ProxyResponse<T> {
-  ok: boolean;
-  data?: T;
-  status_code?: number;
-  error?: string;
-}
-
-interface IpndhtSummaryData {
-  ok: boolean;
-  handles: number;
-  files: number;
-  providers?: number;
-  dht_peers?: number;
-  dht_enabled?: boolean;
-}
-
-interface HandleRecord {
-  handle: string;
-  owner?: string;
-  expires_at?: string;
-}
-
-interface FileRecord {
-  id: string;
-  file_id?: string;
-  owner?: string;
-  mime_type?: string;
-  size_bytes?: number;
-  availability?: string | number;
-  tags?: string[];
-}
-
-interface HandlesResponse {
-  ok: boolean;
-  items: HandleRecord[];
-  total?: number;
-}
-
-interface FilesResponse {
-  ok: boolean;
-  items: FileRecord[];
-  total?: number;
-}
-
-// Fetch helper that always uses the proxy
-async function fetchProxy<T>(path: string): Promise<{ ok: boolean; data: T | null; status: number | null }> {
-  try {
-    const res = await fetch(`/api/rpc${path}`, { cache: "no-store" });
-    if (!res.ok) {
-      return { ok: false, data: null, status: res.status };
-    }
-    const json = await res.json() as ProxyResponse<T>;
-    if (json.ok && json.data) {
-      return { ok: true, data: json.data, status: json.status_code ?? res.status };
-    }
-    return { ok: false, data: null, status: json.status_code ?? res.status };
-  } catch {
-    return { ok: false, data: null, status: null };
-  }
-}
+import { 
+  fetchRpc, 
+  type IpndhtSummaryData, 
+  type HandleRecord, 
+  type FileRecord, 
+  type HandlesResponse, 
+  type FilesResponse 
+} from "@/lib/clientRpc";
 
 function formatSize(bytes?: number) {
   if (bytes === undefined || bytes === null) return "—";
@@ -106,11 +52,11 @@ export default function IpndhtClient() {
     let alive = true;
 
     async function loadData() {
-      // Fetch all endpoints in parallel from the proxy
+      // Use centralized RPC fetch with automatic envelope unwrapping
       const [summaryRes, handlesRes, filesRes] = await Promise.all([
-        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
-        fetchProxy<HandlesResponse>("/ipndht/handles?limit=10"),
-        fetchProxy<FilesResponse>("/ipndht/files?limit=10"),
+        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
+        fetchRpc<HandlesResponse>("/ipndht/handles?limit=10"),
+        fetchRpc<FilesResponse>("/ipndht/files?limit=10"),
       ]);
 
       if (!alive) return;
@@ -136,7 +82,7 @@ export default function IpndhtClient() {
         setError(null);
       }
 
-      // Set handles and files
+      // Set handles and files - data is already unwrapped
       if (handlesRes.ok && handlesRes.data) {
         setHandles(handlesRes.data.items ?? []);
       }

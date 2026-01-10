@@ -6,44 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { L2_APPS, type L2App } from "@/lib/l2Config";
-
-// Types
-interface ProxyResponse<T> {
-  ok: boolean;
-  data?: T;
-  status_code?: number;
-}
-
-interface StatusData {
-  node_id: string;
-  status: string;
-  peer_count: number;
-  consensus: {
-    round: number;
-    validator_ids: string[];
-  };
-  [key: string]: unknown;
-}
-
-interface IpndhtSummary {
-  ok: boolean;
-  handles: number;
-  files: number;
-  providers?: number;
-  dht_peers?: number;
-}
-
-// Fetch helper
-async function fetchProxy<T>(path: string): Promise<{ ok: boolean; data: T | null }> {
-  try {
-    const res = await fetch(`/api/rpc${path}`, { cache: "no-store" });
-    if (!res.ok) return { ok: false, data: null };
-    const json = await res.json() as ProxyResponse<T>;
-    return { ok: json.ok ?? false, data: json.ok ? (json.data ?? null) : null };
-  } catch {
-    return { ok: false, data: null };
-  }
-}
+import { fetchRpc, type StatusData, type IpndhtSummaryData } from "@/lib/clientRpc";
 
 function categoryLabel(category: L2App["category"]) {
   switch (category) {
@@ -75,7 +38,7 @@ function Detail({ label, value }: { label: string; value: string | number }) {
 export default function L2Client() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<StatusData | null>(null);
-  const [ipndht, setIpndht] = useState<IpndhtSummary | null>(null);
+  const [ipndht, setIpndht] = useState<IpndhtSummaryData | null>(null);
   const [statusSource, setStatusSource] = useState<"live" | "error" | "loading">("loading");
   const [ipndhtSource, setIpndhtSource] = useState<"live" | "error" | "loading">("loading");
 
@@ -83,13 +46,15 @@ export default function L2Client() {
     let alive = true;
 
     async function loadData() {
+      // Use centralized RPC fetch with automatic envelope unwrapping
       const [statusRes, ipndhtRes] = await Promise.all([
-        fetchProxy<StatusData>("/status"),
-        fetchProxy<IpndhtSummary>("/ipndht/summary"),
+        fetchRpc<StatusData>("/status"),
+        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
       ]);
 
       if (!alive) return;
 
+      // Status - data is already unwrapped by fetchRpc
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
         setStatusSource("live");
@@ -97,6 +62,7 @@ export default function L2Client() {
         setStatusSource("error");
       }
 
+      // IPNDHT - data is already unwrapped
       if (ipndhtRes.ok && ipndhtRes.data) {
         setIpndht(ipndhtRes.data);
         setIpndhtSource("live");

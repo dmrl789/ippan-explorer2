@@ -8,6 +8,7 @@ import { SourceBadge } from "@/components/common/SourceBadge";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
 import { ValidatorIdentityPanel } from "@/components/common/ValidatorIdentityPanel";
+import { fetchRpc } from "@/lib/clientRpc";
 
 type DataSource = "live" | "error";
 
@@ -41,6 +42,14 @@ interface StatusData {
   };
 }
 
+interface HealthData {
+  consensus?: boolean;
+  rpc?: boolean;
+  storage?: boolean;
+  dhtFile?: { healthy?: boolean; mode?: string };
+  dhtHandle?: { healthy?: boolean; mode?: string };
+}
+
 function formatUptime(seconds: number | null | undefined): string {
   if (seconds == null) return "—";
   const hours = Math.floor(seconds / 3600);
@@ -51,14 +60,6 @@ function formatUptime(seconds: number | null | undefined): string {
     return `${days}d ${remainingHours}h ${minutes}m`;
   }
   return `${hours}h ${minutes}m`;
-}
-
-interface HealthData {
-  consensus?: boolean;
-  rpc?: boolean;
-  storage?: boolean;
-  dhtFile?: { healthy?: boolean; mode?: string };
-  dhtHandle?: { healthy?: boolean; mode?: string };
 }
 
 type HealthStatus = "available" | "unavailable" | "error";
@@ -76,40 +77,28 @@ export default function StatusPage() {
       setLoading(true);
       setError(null);
       
-      // Fetch status
-      try {
-        const res = await fetch("/api/rpc/status", { cache: "no-store" });
-        const json = await res.json();
-        
-        if (json.ok && json.data) {
-          setStatus(json.data);
-          setSource("live");
-        } else {
-          setError(json.error || json.detail || "Failed to fetch status");
-          setSource("error");
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Network error");
+      // Use centralized RPC fetch with automatic envelope unwrapping
+      const statusRes = await fetchRpc<StatusData>("/status");
+      
+      if (statusRes.ok && statusRes.data) {
+        setStatus(statusRes.data);
+        setSource("live");
+      } else {
+        setError(statusRes.error || "Failed to fetch status");
         setSource("error");
       }
       
       // Fetch health (separately, can fail without breaking page)
-      try {
-        const healthRes = await fetch("/api/rpc/health", { cache: "no-store" });
-        const healthJson = await healthRes.json();
-        
-        if (healthJson.ok && healthJson.data) {
-          setHealth(healthJson.data);
-          setHealthStatus("available");
-        } else if (healthRes.status === 404 || healthJson.error_code === "HTTP_404") {
-          // Endpoint not exposed - this is expected
-          setHealthStatus("unavailable");
-        } else {
-          setHealthStatus("error");
-        }
-      } catch {
-        // Health endpoint not available - this is OK
+      const healthRes = await fetchRpc<HealthData>("/health");
+      
+      if (healthRes.ok && healthRes.data) {
+        setHealth(healthRes.data);
+        setHealthStatus("available");
+      } else if (healthRes.statusCode === 404 || healthRes.errorCode === "HTTP_404") {
+        // Endpoint not exposed - this is expected
         setHealthStatus("unavailable");
+      } else {
+        setHealthStatus("error");
       }
       
       setLoading(false);
