@@ -8,49 +8,19 @@ import FileSearchForm from "@/components/forms/FileSearchForm";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
-
-interface ProxyResponse<T> {
-  ok: boolean;
-  data?: T;
-  status_code?: number;
-}
-
-interface FileRecord {
-  id: string;
-  file_id?: string;
-  owner?: string;
-  mime_type?: string;
-  size_bytes?: number;
-  availability?: string | number;
-  dht_published?: boolean;
-  tags?: string[];
-  meta?: Record<string, unknown>;
-}
-
-interface FilesResponse {
-  ok: boolean;
-  items: FileRecord[];
-  total?: number;
-}
+import { fetchRpc, type FilesResponse, type FileRecord } from "@/lib/clientRpc";
 
 async function fetchFiles(): Promise<{ ok: boolean; files: FileRecord[]; error?: string }> {
-  try {
-    const res = await fetch("/api/rpc/ipndht/files?limit=100", { cache: "no-store" });
-    if (!res.ok) {
-      return { ok: false, files: [], error: `HTTP ${res.status}` };
-    }
-    const json = await res.json() as ProxyResponse<FilesResponse>;
-    
-    if (!json.ok || !json.data) {
-      return { ok: false, files: [], error: "Gateway error" };
-    }
-    
-    // Handle various formats
-    const items = json.data.items ?? [];
-    return { ok: true, files: items };
-  } catch (e) {
-    return { ok: false, files: [], error: e instanceof Error ? e.message : "Network error" };
+  // Use centralized RPC fetch with automatic envelope unwrapping
+  const result = await fetchRpc<FilesResponse>("/ipndht/files?limit=100");
+  
+  if (!result.ok || !result.data) {
+    return { ok: false, files: [], error: result.error || "Gateway error" };
   }
+  
+  // Handle various formats - data is already unwrapped
+  const items = result.data.items ?? [];
+  return { ok: true, files: items };
 }
 
 function shorten(value: string, size = 10) {

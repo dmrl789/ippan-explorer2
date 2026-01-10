@@ -10,65 +10,14 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
-
-// Types for proxy responses
-interface ProxyResponse<T> {
-  ok: boolean;
-  data?: T;
-  status_code?: number;
-  error?: string;
-  rpc_base?: string;
-}
-
-interface StatusData {
-  node_id: string;
-  version: string;
-  status: string;
-  network_active: boolean;
-  peer_count: number;
-  mempool_size: number;
-  uptime_seconds: number;
-  consensus: {
-    round: number;
-    self_id: string;
-    validator_ids: string[];
-    validators?: Record<string, unknown>;
-  };
-  ai?: {
-    enabled: boolean;
-    model_version: string;
-  };
-  [key: string]: unknown;
-}
-
-interface IpndhtSummary {
-  ok: boolean;
-  handles: number;
-  files: number;
-  providers?: number;
-  dht_peers?: number;
-}
-
-interface PeerInfo {
-  peer_id: string;
-  addr?: string;
-}
-
-// Fetch helper
-async function fetchProxy<T>(path: string): Promise<{ ok: boolean; data: T | null; rpcBase?: string }> {
-  try {
-    const res = await fetch(`/api/rpc${path}`, { cache: "no-store" });
-    if (!res.ok) return { ok: false, data: null };
-    const json = await res.json() as ProxyResponse<T>;
-    return { 
-      ok: json.ok ?? false, 
-      data: json.ok ? (json.data ?? null) : null,
-      rpcBase: json.rpc_base 
-    };
-  } catch {
-    return { ok: false, data: null };
-  }
-}
+import { 
+  fetchRpc, 
+  normalizePeers,
+  type StatusData, 
+  type IpndhtSummaryData, 
+  type PeerInfo,
+  type PeersData,
+} from "@/lib/clientRpc";
 
 function formatUptime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
@@ -99,7 +48,7 @@ function StatCard({ label, value, href, source }: { label: string; value: string
 export default function DashboardClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<StatusData | null>(null);
-  const [ipndht, setIpndht] = useState<IpndhtSummary | null>(null);
+  const [ipndht, setIpndht] = useState<IpndhtSummaryData | null>(null);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [rpcBase, setRpcBase] = useState<string>("");
   const [statusSource, setStatusSource] = useState<"live" | "error" | "loading">("loading");
@@ -110,15 +59,16 @@ export default function DashboardClient() {
     let alive = true;
 
     async function loadData() {
+      // Use centralized RPC fetch with automatic envelope unwrapping
       const [statusRes, ipndhtRes, peersRes] = await Promise.all([
-        fetchProxy<StatusData>("/status"),
-        fetchProxy<IpndhtSummary>("/ipndht/summary"),
-        fetchProxy<PeerInfo[] | { peers: PeerInfo[] }>("/peers"),
+        fetchRpc<StatusData>("/status"),
+        fetchRpc<IpndhtSummaryData>("/ipndht/summary"),
+        fetchRpc<PeersData>("/peers"),
       ]);
 
       if (!alive) return;
 
-      // Status
+      // Status - data is already unwrapped by fetchRpc
       if (statusRes.ok && statusRes.data) {
         setStatus(statusRes.data);
         setStatusSource("live");
@@ -127,7 +77,7 @@ export default function DashboardClient() {
         setStatusSource("error");
       }
 
-      // IPNDHT
+      // IPNDHT - data is already unwrapped
       if (ipndhtRes.ok && ipndhtRes.data) {
         setIpndht(ipndhtRes.data);
         setIpndhtSource("live");
@@ -135,12 +85,10 @@ export default function DashboardClient() {
         setIpndhtSource("error");
       }
 
-      // Peers - handle both array and { peers: [] } format
+      // Peers - normalize the various response formats
       if (peersRes.ok && peersRes.data) {
-        const peersData = Array.isArray(peersRes.data) 
-          ? peersRes.data 
-          : (peersRes.data as { peers: PeerInfo[] }).peers ?? [];
-        setPeers(peersData);
+        const normalizedPeers = normalizePeers(peersRes.data);
+        setPeers(normalizedPeers);
         setPeersSource("live");
       } else {
         setPeersSource("error");

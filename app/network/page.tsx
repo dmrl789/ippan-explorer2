@@ -5,6 +5,13 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
+import { 
+  fetchRpc, 
+  normalizePeers, 
+  type StatusData, 
+  type PeersData, 
+  type PeerInfo 
+} from "@/lib/clientRpc";
 
 type DataSource = "live" | "error";
 
@@ -15,106 +22,57 @@ interface NormalizedPeer {
   last_seen_ms?: number;
 }
 
-function normalizePeers(input: unknown): NormalizedPeer[] {
-  // Handle various formats: array, { peers: [...] }, { items: [...] }
-  let dataArray: unknown[];
-  if (Array.isArray(input)) {
-    dataArray = input;
-  } else if (input && typeof input === "object") {
-    const obj = input as Record<string, unknown>;
-    if (Array.isArray(obj.peers)) {
-      dataArray = obj.peers;
-    } else if (Array.isArray(obj.items)) {
-      dataArray = obj.items;
-    } else {
-      return [];
-    }
-  } else {
-    return [];
-  }
-  
-  return dataArray.map((p, index) => {
-    // Case 1: string like "http://188.245.97.41:9000"
-    if (typeof p === "string") {
-      const addr = p.replace("http://", "").replace("https://", "");
-      return {
-        peer_id: `peer-${index + 1}`,
-        address: addr,
-      };
-    }
-    
-    // Case 2: object with peer_id/addr
-    if (p && typeof p === "object") {
-      const obj = p as Record<string, unknown>;
-      return {
-        peer_id: String(obj.peer_id ?? obj.id ?? `peer-${index + 1}`),
-        address: String(obj.address ?? obj.addr ?? obj.multiaddr ?? "unknown"),
-        agent: obj.agent ? String(obj.agent) : undefined,
-        last_seen_ms: typeof obj.last_seen_ms === "number" ? obj.last_seen_ms : undefined,
-      };
-    }
-    
-    return {
-      peer_id: `unknown-${index + 1}`,
-      address: "unknown",
-    };
-  }).filter(p => p.address !== "unknown");
-}
-
 export default function NetworkPage() {
   const [peers, setPeers] = useState<NormalizedPeer[]>([]);
   const [peerCount, setPeerCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<DataSource>("error");
+  // Start with "live" - only show "error" if fetches actually fail
+  const [source, setSource] = useState<DataSource>("live");
 
   useEffect(() => {
     async function fetchPeers() {
       setLoading(true);
       setError(null);
       
-      try {
-        // First try /api/rpc/peers
-        const peersRes = await fetch("/api/rpc/peers", { cache: "no-store" });
-        const peersJson = await peersRes.json();
-        
-        if (peersJson.ok && peersJson.data) {
-          const normalized = normalizePeers(peersJson.data);
-          setPeers(normalized);
-          setPeerCount(normalized.length);
-          setSource("live");
-          return;
-        }
-        
-        // Fallback: get peers from /api/rpc/status
-        const statusRes = await fetch("/api/rpc/status", { cache: "no-store" });
-        const statusJson = await statusRes.json();
-        
-        if (statusJson.ok && statusJson.data) {
-          const statusData = statusJson.data;
-          
-          // Get peers array if available
-          if (Array.isArray(statusData.peers)) {
-            const normalized = normalizePeers(statusData.peers);
-            setPeers(normalized);
-            setPeerCount(statusData.peer_count ?? normalized.length);
-            setSource("live");
-          } else if (statusData.peer_count) {
-            // No peers array but have count
-            setPeerCount(statusData.peer_count);
-            setSource("live");
-          } else {
-            setError("No peer data available");
-          }
-        } else {
-          setError(statusJson.error || "Failed to fetch peer data");
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Network error");
-        setSource("error");
-      } finally {
+      // Use centralized RPC fetch with automatic envelope unwrapping
+      // First try /peers endpoint
+      const peersRes = await fetchRpc<PeersData>("/peers");
+      
+      if (peersRes.ok && peersRes.data) {
+        const normalized = normalizePeers(peersRes.data) as NormalizedPeer[];
+        setPeers(normalized);
+        setPeerCount(normalized.length);
+        setSource("live");
         setLoading(false);
+        return;
       }
+      
+      // Fallback: get peer count from /status
+      const statusRes = await fetchRpc<StatusData>("/status");
+      
+      if (statusRes.ok && statusRes.data) {
+        const statusData = statusRes.data;
+        
+        // Check if status has peers array
+        const statusPeers = (statusData as Record<string, unknown>).peers;
+        if (Array.isArray(statusPeers)) {
+          const normalized = normalizePeers(statusPeers) as NormalizedPeer[];
+          setPeers(normalized);
+          setPeerCount(statusData.peer_count ?? normalized.length);
+        } else if (typeof statusData.peer_count === "number") {
+          // No peers array but have count - this is still a success!
+          setPeerCount(statusData.peer_count);
+        }
+        // Status fetch succeeded - mark as live (even if peer data is partial)
+        setSource("live");
+      } else {
+        // Both /peers AND /status failed - this is a real error
+        setError(peersRes.error || statusRes.error || "Failed to fetch peer data");
+        setSource("error");
+      }
+      
+      setLoading(false);
     }
     
     fetchPeers();

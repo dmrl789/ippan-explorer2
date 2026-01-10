@@ -300,6 +300,24 @@ export function normalizeBlockList(response: unknown): BlockSummary[] {
   return rawList.map((item) => normalizeBlockSummary(item));
 }
 
+/**
+ * Convert timestamp to milliseconds if it's in microseconds.
+ * DevNet timestamps may be in microseconds (e.g., 1767806434286085).
+ */
+function normalizeTimestampToMs(ts: unknown): number | undefined {
+  if (ts === undefined || ts === null) return undefined;
+  
+  const num = typeof ts === "string" ? parseInt(ts, 10) : (typeof ts === "number" ? ts : NaN);
+  if (isNaN(num)) return undefined;
+  
+  // If timestamp is > 50 trillion, it's likely microseconds
+  if (num > 50_000_000_000_000) {
+    return Math.floor(num / 1000);
+  }
+  
+  return num;
+}
+
 function normalizeBlockSummary(raw: unknown): BlockSummary {
   if (!raw || typeof raw !== "object") {
     return { block_hash: "" };
@@ -307,6 +325,10 @@ function normalizeBlockSummary(raw: unknown): BlockSummary {
   
   const item = raw as Record<string, unknown>;
   const header = item.header as Record<string, unknown> | undefined;
+  
+  // Get raw timestamp value (may be in microseconds)
+  const rawTimestamp = item.timestamp ?? header?.timestamp;
+  const rawIppanTimeMs = item.ippan_time_ms ?? header?.ippan_time_ms;
   
   return {
     block_hash: 
@@ -330,12 +352,9 @@ function normalizeBlockSummary(raw: unknown): BlockSummary {
       (item.tx_count as number) ?? 
       (Array.isArray(item.tx_ids) ? item.tx_ids.length : undefined) ??
       (Array.isArray(item.transactions) ? item.transactions.length : undefined),
-    timestamp: 
-      (item.timestamp as string) ?? 
-      (header?.timestamp as string),
-    ippan_time_ms: 
-      (item.ippan_time_ms as number) ?? 
-      (header?.ippan_time_ms as number),
+    timestamp: typeof rawTimestamp === "string" ? rawTimestamp : undefined,
+    // Normalize timestamp to milliseconds (handles both µs and ms)
+    ippan_time_ms: normalizeTimestampToMs(rawIppanTimeMs) ?? normalizeTimestampToMs(rawTimestamp),
   };
 }
 

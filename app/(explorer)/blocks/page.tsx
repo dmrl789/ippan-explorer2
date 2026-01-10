@@ -13,6 +13,7 @@ import { JsonPanel } from "@/components/common/JsonPanel";
 import { type BlockSummary } from "@/lib/normalize";
 import { shortenHash } from "@/lib/format";
 import { IPPAN_RPC_BASE } from "@/lib/rpc";
+import { toMs } from "@/lib/clientRpc";
 
 // Response type matching the enhanced API
 type BlocksSource = "upstream_blocks" | "fallback_tx_recent";
@@ -305,15 +306,15 @@ export default function BlocksPage() {
               header: "Time",
               mobilePriority: 6,
               hideOnMobile: true,
-              render: (block) => (
-                <span className="text-slate-500 text-xs">
-                  {block.ippan_time_ms 
-                    ? new Date(block.ippan_time_ms).toLocaleString()
-                    : block.timestamp 
-                      ? new Date(block.timestamp).toLocaleString()
-                      : "—"}
-                </span>
-              ),
+              render: (block) => {
+                // Convert microseconds to milliseconds if needed
+                const tsMs = toMs(block.ippan_time_ms) ?? toMs(block.timestamp as unknown as number);
+                return (
+                  <span className="text-slate-500 text-xs">
+                    {tsMs ? new Date(tsMs).toLocaleString() : "—"}
+                  </span>
+                );
+              },
             },
           ]}
         />
@@ -335,6 +336,13 @@ function normalizeBlock(raw: unknown): BlockSummary {
 
   const item = raw as Record<string, unknown>;
   const header = item.header as Record<string, unknown> | undefined;
+
+  // Get raw timestamp (may be in microseconds)
+  const rawTimestamp = item.timestamp ?? header?.timestamp;
+  const rawIppanTimeMs = item.ippan_time_ms ?? header?.ippan_time_ms;
+  
+  // Convert to milliseconds if needed
+  const normalizedMs = toMs(rawIppanTimeMs as number) ?? toMs(rawTimestamp as number);
 
   return {
     block_hash:
@@ -359,10 +367,7 @@ function normalizeBlock(raw: unknown): BlockSummary {
       (Array.isArray(item.tx_ids) ? item.tx_ids.length : undefined) ??
       (Array.isArray(item.transactions) ? item.transactions.length : undefined),
     timestamp:
-      (item.timestamp as string) ??
-      (header?.timestamp as string),
-    ippan_time_ms:
-      (item.ippan_time_ms as number) ??
-      (header?.ippan_time_ms as number),
+      typeof rawTimestamp === "string" ? rawTimestamp : undefined,
+    ippan_time_ms: normalizedMs ?? undefined,
   };
 }

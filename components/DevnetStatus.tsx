@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { StatusPill } from "@/components/ui/StatusPill";
 import { getValidatorSource, type ValidatorSource } from "@/components/common/ValidatorSourceBadge";
+import { fetchRpc, type StatusData } from "@/lib/clientRpc";
 
 /**
  * DevNet status derived from the single canonical RPC gateway.
@@ -33,67 +34,52 @@ interface GatewayStatus {
 }
 
 async function fetchGatewayStatus(): Promise<GatewayStatus> {
-  try {
-    // Use the API proxy route instead of direct RPC call
-    const res = await fetch("/api/rpc/status", {
-      cache: "no-store",
-    });
+  // Use centralized RPC fetch helper with automatic envelope unwrapping
+  const result = await fetchRpc<StatusData>("/status");
 
-    const json = await res.json();
-
-    // Handle proxy error response
-    if (!json.ok) {
-      return {
-        ok: false,
-        loading: false,
-        error: json.detail || json.error || "Gateway RPC unavailable",
-        errorCode: json.error_code || json.error,
-        rpcBase: json.rpc_base,
-      };
-    }
-
-    const data = json.data;
-
-    // Validate we got a proper status response
-    if (!data || typeof data !== "object") {
-      return {
-        ok: false,
-        loading: false,
-        error: "Invalid response from gateway",
-        errorCode: "INVALID_RESPONSE",
-        rpcBase: json.rpc_base,
-      };
-    }
-
-    // Extract data from the DevNet status schema (status_schema_version: 2)
-    const validatorIds = Array.isArray(data.consensus?.validator_ids) ? data.consensus.validator_ids : [];
-    const { count: validatorCount, source: validatorCountSource } = getValidatorSource(data);
-
-    return {
-      ok: true,
-      loading: false,
-      nodeId: data.node_id,
-      version: data.version,
-      networkActive: data.network_active === true,
-      peerCount: typeof data.peer_count === "number" ? data.peer_count : undefined,
-      consensusRound: typeof data.consensus?.round === "number" ? data.consensus.round : undefined,
-      validatorCount,
-      validatorIds: validatorIds,
-      validatorCountSource,
-      uptimeSeconds: typeof data.uptime_seconds === "number" ? data.uptime_seconds : undefined,
-      mempoolSize: typeof data.mempool_size === "number" ? data.mempool_size : undefined,
-      rpcBase: json.rpc_base,
-      lastSuccessTs: json.ts,
-    };
-  } catch (err) {
-    // Network error or JSON parse error
+  // Handle proxy/network error
+  if (!result.ok || !result.data) {
     return {
       ok: false,
       loading: false,
-      error: err instanceof Error ? err.message : "Gateway RPC unavailable (connection failed)",
-      errorCode: "FETCH_ERROR",
+      error: result.error || "Gateway RPC unavailable",
+      errorCode: result.errorCode,
+      rpcBase: result.rpcBase,
     };
   }
+
+  const data = result.data;
+
+  // Validate we got a proper status response (must have node_id)
+  if (!data.node_id) {
+    return {
+      ok: false,
+      loading: false,
+      error: "Invalid response from gateway (missing node_id)",
+      errorCode: "INVALID_RESPONSE",
+      rpcBase: result.rpcBase,
+    };
+  }
+
+  // Extract data from the DevNet status schema (status_schema_version: 2)
+  const validatorIds = Array.isArray(data.consensus?.validator_ids) ? data.consensus.validator_ids : [];
+  const { count: validatorCount, source: validatorCountSource } = getValidatorSource(data);
+
+  return {
+    ok: true,
+    loading: false,
+    nodeId: data.node_id,
+    version: data.version,
+    networkActive: data.network_active === true,
+    peerCount: typeof data.peer_count === "number" ? data.peer_count : undefined,
+    consensusRound: typeof data.consensus?.round === "number" ? data.consensus.round : undefined,
+    validatorCount,
+    validatorIds: validatorIds,
+    validatorCountSource,
+    uptimeSeconds: typeof data.uptime_seconds === "number" ? data.uptime_seconds : undefined,
+    mempoolSize: typeof data.mempool_size === "number" ? data.mempool_size : undefined,
+    rpcBase: result.rpcBase,
+  };
 }
 
 function formatUptime(seconds?: number): string {

@@ -219,14 +219,23 @@ async function safeJsonFetchWithStatusInternal<T>(
     // so do NOT gate this on `isBrowser()`.
     if (jsonData && typeof jsonData === "object" && "ok" in jsonData) {
       const proxyResponse = jsonData as { ok: boolean; data?: T; status_code?: number; error?: string };
-      if (proxyResponse.ok && proxyResponse.data !== undefined) {
+      
+      // Check if it's an error response
+      if (proxyResponse.ok === false) {
+        return { status: proxyResponse.status_code ?? res.status, data: null, url };
+      }
+      
+      // Format 1: Envelope with `data` field → unwrap
+      if ("data" in proxyResponse && proxyResponse.data !== undefined) {
         return { status: proxyResponse.status_code ?? res.status, data: proxyResponse.data, url };
       }
-      // Proxy returned error
-      return { status: proxyResponse.status_code ?? res.status, data: null, url };
+      
+      // Format 2: Plain response with `ok` but no `data` (e.g., { ok: true, blocks: [...] })
+      // The entire response IS the payload - return it as-is
+      return { status: proxyResponse.status_code ?? res.status, data: jsonData as T, url };
     }
 
-    // Direct RPC response (server-side)
+    // Direct RPC response (server-side) - no `ok` field
     return { status: res.status, data: jsonData as T, url };
   } catch (err) {
     if (isBrowser()) {

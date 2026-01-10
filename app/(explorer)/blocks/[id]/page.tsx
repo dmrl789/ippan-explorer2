@@ -12,6 +12,7 @@ import { fetchBlockDetail } from "@/lib/blocks";
 import { shortenHash } from "@/lib/format";
 import { formatMs } from "@/lib/ippanTime";
 import { IPPAN_RPC_BASE } from "@/lib/rpc";
+import { toMs } from "@/lib/clientRpc";
 
 interface BlockDetailPageProps {
   params: Promise<{ id: string }>;
@@ -78,7 +79,9 @@ export default async function BlockDetailPage({ params }: BlockDetailPageProps) 
   }
 
   const block = result.block;
-  const blockIppanMs = block.ippan_time_ms ?? (block.timestamp ? new Date(block.timestamp).getTime() : Date.now());
+  // Convert timestamps (may be in microseconds)
+  const rawTs = block.ippan_time_ms ?? block.timestamp;
+  const blockIppanMs = toMs(rawTs as unknown as number) ?? Date.now();
   const blockIso = formatMs(blockIppanMs);
 
   return (
