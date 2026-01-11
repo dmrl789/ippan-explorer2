@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import Link from "next/link";
 import { toMs } from "@/lib/time";
 
+// Force Node.js runtime - Edge runtime cannot fetch plain http:// URLs reliably
+export const runtime = "nodejs";
 // Force dynamic rendering - no caching
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -94,11 +96,14 @@ export default async function BlocksPage() {
   console.log("[BlocksPage] SSR: calling getBlocksWithFallback directly (no HTTP self-fetch)");
   
   let initial: BlocksApiResponse | null = null;
+  let ssrError: string | null = null;
   
   try {
     initial = await getBlocksWithFallback(25);
     console.log(`[BlocksPage] SSR: got ${initial.blocks?.length ?? 0} blocks (${initial.source})`);
-  } catch (err) {
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    ssrError = errorMessage;
     console.error("[BlocksPage] SSR: getBlocksWithFallback error:", err);
   }
 
@@ -127,10 +132,18 @@ export default async function BlocksPage() {
       
       {/* SSR debug info - always show for debugging */}
       <div className="text-xs text-slate-600 font-mono">
-        SSR: {initial ? `${initial.blocks?.length ?? 0} blocks` : "no data"} 
+        SSR: {initial ? `${initial.blocks?.length ?? 0} blocks` : "no initial data"} 
         {initial?.source ? ` (${initial.source})` : ""}
         {initial?.fallback_reason ? ` [${initial.fallback_reason}]` : ""}
       </div>
+      
+      {/* SSR error display - makes failures visible instead of silent */}
+      {ssrError && (
+        <div className="mt-2 rounded-xl border border-red-800/50 bg-red-950/30 p-3 text-sm">
+          <div className="font-semibold text-red-300">SSR error</div>
+          <div className="text-red-400/80 font-mono text-xs mt-1">{ssrError}</div>
+        </div>
+      )}
       
       {/* SSR fallback for no-JS environments */}
       <SSRBlockList blocks={initial?.blocks ?? []} />
