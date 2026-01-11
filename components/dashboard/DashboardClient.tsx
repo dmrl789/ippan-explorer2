@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useEffect, useState, type ReactNode } from "react";
-import CopyButton from "@/components/common/CopyButton";
+import { useEffect, useState, useCallback } from "react";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { DevnetStatus } from "@/components/DevnetStatus";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
-import { ValidatorSourceBadge, getValidatorSource } from "@/components/common/ValidatorSourceBadge";
+import { getValidatorSource } from "@/components/common/ValidatorSourceBadge";
 import { fetchProxy } from "@/lib/clientFetch";
+import type { DashboardSSRData } from "@/app/page";
 
 // Response types
 interface StatusData {
@@ -70,76 +69,87 @@ function StatCard({ label, value, href, source }: { label: string; value: string
   return content;
 }
 
-export default function DashboardClient() {
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<StatusData | null>(null);
-  const [ipndht, setIpndht] = useState<IpndhtSummaryData | null>(null);
-  const [peers, setPeers] = useState<PeerInfo[]>([]);
-  const [rpcBase, setRpcBase] = useState<string>("");
-  const [statusSource, setStatusSource] = useState<"live" | "error" | "loading">("loading");
-  const [ipndhtSource, setIpndhtSource] = useState<"live" | "error" | "loading">("loading");
-  const [peersSource, setPeersSource] = useState<"live" | "error" | "loading">("loading");
+interface DashboardClientProps {
+  initial?: DashboardSSRData;
+}
 
-  useEffect(() => {
-    let alive = true;
+export default function DashboardClient({ initial }: DashboardClientProps) {
+  // Initialize from SSR data if available
+  const [loading, setLoading] = useState(!initial?.statusOk);
+  const [status, setStatus] = useState<StatusData | null>(initial?.status ?? null);
+  const [ipndht, setIpndht] = useState<IpndhtSummaryData | null>(initial?.ipndht ?? null);
+  const [peers, setPeers] = useState<PeerInfo[]>(initial?.peers ?? []);
+  const [rpcBase, setRpcBase] = useState<string>(initial?.rpcBase ?? "");
+  const [statusSource, setStatusSource] = useState<"live" | "error" | "loading">(
+    initial?.statusOk ? "live" : "loading"
+  );
+  const [ipndhtSource, setIpndhtSource] = useState<"live" | "error" | "loading">(
+    initial?.ipndhtOk ? "live" : "loading"
+  );
+  const [peersSource, setPeersSource] = useState<"live" | "error" | "loading">(
+    initial?.peersOk ? "live" : "loading"
+  );
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-    async function loadData() {
-      const [statusRes, ipndhtRes, peersRes] = await Promise.all([
-        fetchProxy<StatusData>("/status"),
-        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
-        fetchProxy<PeersData>("/peers"),
-      ]);
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
 
-      if (!alive) return;
+    const [statusRes, ipndhtRes, peersRes] = await Promise.all([
+      fetchProxy<StatusData>("/status"),
+      fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
+      fetchProxy<PeersData>("/peers"),
+    ]);
 
-      // Status
-      if (statusRes.ok && statusRes.data) {
-        setStatus(statusRes.data);
-        setStatusSource("live");
-        // Extract rpc_base from raw response if available
-        const raw = statusRes.raw as Record<string, unknown> | undefined;
-        if (raw?.rpc_base) setRpcBase(String(raw.rpc_base));
-      } else {
-        setStatusSource("error");
-      }
-
-      // IPNDHT
-      if (ipndhtRes.ok && ipndhtRes.data) {
-        setIpndht(ipndhtRes.data);
-        setIpndhtSource("live");
-      } else {
-        setIpndhtSource("error");
-      }
-
-      // Peers - normalize the various response formats
-      if (peersRes.ok && peersRes.data) {
-        const pdata = peersRes.data;
-        let arr: unknown[] = [];
-        if (Array.isArray(pdata)) {
-          arr = pdata;
-        } else if (pdata && typeof pdata === "object" && "peers" in pdata) {
-          arr = (pdata.peers as unknown[]) ?? [];
-        }
-        const normalizedPeers: PeerInfo[] = arr.map((p, i) => {
-          if (typeof p === "string") return { peer_id: `peer-${i + 1}`, address: p };
-          const obj = p as Record<string, unknown>;
-          return {
-            peer_id: String(obj.peer_id ?? obj.id ?? `peer-${i + 1}`),
-            address: String(obj.address ?? obj.addr ?? "unknown"),
-          };
-        });
-        setPeers(normalizedPeers);
-        setPeersSource("live");
-      } else {
-        setPeersSource("error");
-      }
-
-      setLoading(false);
+    // Status
+    if (statusRes.ok && statusRes.data) {
+      setStatus(statusRes.data);
+      setStatusSource("live");
+      // Extract rpc_base from raw response if available
+      const raw = statusRes.raw as Record<string, unknown> | undefined;
+      if (raw?.rpc_base) setRpcBase(String(raw.rpc_base));
+    } else {
+      setStatusSource("error");
     }
 
-    loadData();
-    return () => { alive = false; };
+    // IPNDHT
+    if (ipndhtRes.ok && ipndhtRes.data) {
+      setIpndht(ipndhtRes.data);
+      setIpndhtSource("live");
+    } else {
+      setIpndhtSource("error");
+    }
+
+    // Peers - normalize the various response formats
+    if (peersRes.ok && peersRes.data) {
+      const pdata = peersRes.data;
+      let arr: unknown[] = [];
+      if (Array.isArray(pdata)) {
+        arr = pdata;
+      } else if (pdata && typeof pdata === "object" && "peers" in pdata) {
+        arr = (pdata.peers as unknown[]) ?? [];
+      }
+      const normalizedPeers: PeerInfo[] = arr.map((p, i) => {
+        if (typeof p === "string") return { peer_id: `peer-${i + 1}`, address: p };
+        const obj = p as Record<string, unknown>;
+        return {
+          peer_id: String(obj.peer_id ?? obj.id ?? `peer-${i + 1}`),
+          address: String(obj.address ?? obj.addr ?? "unknown"),
+        };
+      });
+      setPeers(normalizedPeers);
+      setPeersSource("live");
+    } else {
+      setPeersSource("error");
+    }
+
+    setLoading(false);
+    setIsRefreshing(false);
   }, []);
+
+  useEffect(() => {
+    // Refresh to validate/update SSR data
+    refresh();
+  }, [refresh]);
 
   const devnetOk = statusSource === "live" && status?.status === "ok";
   const validatorIds = status?.consensus?.validator_ids ?? [];
@@ -151,14 +161,23 @@ export default function DashboardClient() {
         title="Dashboard"
         description="Devnet-only explorer: live IPPAN devnet RPC (no mock/demo data)"
         actions={
-          <a
-            href="/api/rpc/status"
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
-          >
-            View /status JSON
-          </a>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refresh}
+              disabled={isRefreshing}
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100 disabled:opacity-50"
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+            <a
+              href="/api/rpc/status"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100"
+            >
+              View /status JSON
+            </a>
+          </div>
         }
       />
 

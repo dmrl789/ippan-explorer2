@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import SimpleTable from "@/components/tables/SimpleTable";
 import FileSearchForm from "@/components/forms/FileSearchForm";
@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchProxy } from "@/lib/clientFetch";
+import type { FilesSSRData } from "@/app/(explorer)/files/page";
 
 interface FileRecord {
   id: string;
@@ -30,11 +31,11 @@ interface FilesResponse {
 
 async function fetchFiles(): Promise<{ ok: boolean; files: FileRecord[]; error?: string }> {
   const result = await fetchProxy<FilesResponse>("/ipndht/files?limit=100");
-  
+
   if (!result.ok || !result.data) {
     return { ok: false, files: [], error: !result.ok ? result.error : "Gateway error" };
   }
-  
+
   // Handle various response shapes
   const items = result.data.items ?? result.data.files ?? [];
   return { ok: true, files: items };
@@ -46,39 +47,47 @@ function shorten(value: string, size = 10) {
   return `${value.slice(0, size)}…${value.slice(-size)}`;
 }
 
-export default function FilesClient() {
+interface FilesClientProps {
+  initial?: FilesSSRData;
+}
+
+export default function FilesClient({ initial }: FilesClientProps) {
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(true);
-  const [files, setFiles] = useState<FileRecord[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<"live" | "error" | "loading">("loading");
+  const [loading, setLoading] = useState(!initial?.ok);
+  const [files, setFiles] = useState<FileRecord[]>(initial?.files ?? []);
+  const [error, setError] = useState<string | null>(initial?.error ?? null);
+  const [source, setSource] = useState<"live" | "error" | "loading">(
+    initial?.ok ? "live" : initial?.error ? "error" : "loading"
+  );
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const queryId = (searchParams.get("id") ?? searchParams.get("query") ?? "").trim();
   const queryOwner = (searchParams.get("owner") ?? "").trim();
   const queryTag = (searchParams.get("tag") ?? "").trim();
 
-  useEffect(() => {
-    let alive = true;
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    const result = await fetchFiles();
 
-    async function load() {
-      const result = await fetchFiles();
-      if (!alive) return;
-
-      if (result.ok) {
-        setFiles(result.files);
-        setSource("live");
-        setError(null);
-      } else {
-        setFiles([]);
+    if (result.ok) {
+      setFiles(result.files);
+      setSource("live");
+      setError(null);
+    } else {
+      // Don't wipe existing data on refresh error
+      if (files.length === 0) {
         setSource("error");
-        setError(result.error ?? "Failed to load files");
       }
-      setLoading(false);
+      setError(result.error ?? "Failed to load files");
     }
+    setLoading(false);
+    setIsRefreshing(false);
+  }, [files.length]);
 
-    load();
-    return () => { alive = false; };
-  }, []);
+  useEffect(() => {
+    // Refresh to validate/update SSR data
+    refresh();
+  }, [refresh]);
 
   // Filter files based on search params
   const filtered = files.filter((file) => {
@@ -110,7 +119,18 @@ export default function FilesClient() {
       <Card
         title="Filter"
         description="Search by file id, owner address, or tag"
-        headerSlot={<SourceBadge source={source} />}
+        headerSlot={
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refresh}
+              disabled={isRefreshing}
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100 disabled:opacity-50"
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+            <SourceBadge source={source} />
+          </div>
+        }
       >
         {error && !loading && (
           <div className="mb-4 rounded-lg border border-amber-900/50 bg-amber-950/30 p-3">

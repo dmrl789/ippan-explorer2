@@ -1,9 +1,12 @@
 /**
  * Simple client-side fetch helper for RPC proxy.
- * 
+ *
  * Handles BOTH response formats:
  * 1. Envelope: { ok, data: {...} }
  * 2. Plain: { ok, blocks: [...] }
+ *
+ * This helper should be used in client components only.
+ * For SSR, use lib/serverFetch.ts instead.
  */
 
 export type FetchResult<T> =
@@ -12,6 +15,13 @@ export type FetchResult<T> =
 
 /**
  * Unwrap response - handles both envelope and plain formats.
+ *
+ * This function handles the inconsistent API response shapes:
+ * - /status and /ipndht/* return an envelope: { ok, data: { … } }
+ * - /blocks returns a plain object: { ok, blocks: … }
+ *
+ * The unwrapper detects which format is being used and extracts
+ * the actual data appropriately.
  */
 function unwrap<T>(json: unknown): { ok: boolean; data: T | null; raw: unknown } {
   if (!json || typeof json !== "object") {
@@ -20,17 +30,24 @@ function unwrap<T>(json: unknown): { ok: boolean; data: T | null; raw: unknown }
 
   const obj = json as Record<string, unknown>;
 
-  // Check if request failed
+  // Check if request failed explicitly
   if (obj.ok === false) {
     return { ok: false, data: null, raw: json };
   }
 
   // Envelope format: { ok, data: {...} } → extract data
+  // This is the preferred format for most endpoints
   if ("data" in obj && obj.data !== undefined) {
+    // Double-check the nested data isn't also an error
+    const innerData = obj.data as Record<string, unknown>;
+    if (innerData && typeof innerData === "object" && innerData.ok === false) {
+      return { ok: false, data: null, raw: json };
+    }
     return { ok: true, data: obj.data as T, raw: json };
   }
 
-  // Plain format: { ok, blocks: [...] } → return entire object
+  // Plain format: { ok, blocks: [...] } or { ok, peers: [...] } etc.
+  // These endpoints don't use the envelope wrapper
   return { ok: true, data: json as T, raw: json };
 }
 

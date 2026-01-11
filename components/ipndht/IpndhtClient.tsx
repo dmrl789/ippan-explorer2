@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import SimpleTable from "@/components/tables/SimpleTable";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { fetchProxy } from "@/lib/clientFetch";
+import type { IpndhtSSRData } from "@/app/ipndht/page";
 
 interface IpndhtSummaryData {
   files: number;
@@ -61,70 +62,73 @@ function SummaryStat({ label, value, hint }: { label: string; value?: number; hi
   );
 }
 
-export default function IpndhtClient() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<IpndhtSummaryData | null>(null);
-  const [handles, setHandles] = useState<HandleRecord[]>([]);
-  const [files, setFiles] = useState<FileRecord[]>([]);
+interface IpndhtClientProps {
+  initial?: IpndhtSSRData;
+}
+
+export default function IpndhtClient({ initial }: IpndhtClientProps) {
+  // Initialize from SSR data if available
+  const hasInitial = initial?.summaryOk || initial?.filesOk || initial?.handlesOk;
+  const [loading, setLoading] = useState(!hasInitial);
+  const [error, setError] = useState<string | null>(initial?.error ?? null);
+  const [summary, setSummary] = useState<IpndhtSummaryData | null>(initial?.summary ?? null);
+  const [handles, setHandles] = useState<HandleRecord[]>(initial?.handles ?? []);
+  const [files, setFiles] = useState<FileRecord[]>(initial?.files ?? []);
   const [sectionsStatus, setSectionsStatus] = useState({
-    summary: "loading" as "live" | "error" | "loading",
-    handles: "loading" as "live" | "error" | "loading",
-    files: "loading" as "live" | "error" | "loading",
+    summary: (initial?.summaryOk ? "live" : "loading") as "live" | "error" | "loading",
+    handles: (initial?.handlesOk ? "live" : "loading") as "live" | "error" | "loading",
+    files: (initial?.filesOk ? "live" : "loading") as "live" | "error" | "loading",
   });
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
 
-    async function loadData() {
-      const [summaryRes, handlesRes, filesRes] = await Promise.all([
-        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
-        fetchProxy<HandlesResponse>("/ipndht/handles?limit=10"),
-        fetchProxy<FilesResponse>("/ipndht/files?limit=10"),
-      ]);
+    const [summaryRes, handlesRes, filesRes] = await Promise.all([
+      fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
+      fetchProxy<HandlesResponse>("/ipndht/handles?limit=10"),
+      fetchProxy<FilesResponse>("/ipndht/files?limit=10"),
+    ]);
 
-      if (!alive) return;
+    // Update sections status
+    setSectionsStatus({
+      summary: summaryRes.ok ? "live" : "error",
+      handles: handlesRes.ok ? "live" : "error",
+      files: filesRes.ok ? "live" : "error",
+    });
 
-      // Update sections status
-      setSectionsStatus({
-        summary: summaryRes.ok ? "live" : "error",
-        handles: handlesRes.ok ? "live" : "error",
-        files: filesRes.ok ? "live" : "error",
-      });
-
-      // If summary works, we have a working connection
-      if (summaryRes.ok && summaryRes.data) {
-        setSummary(summaryRes.data);
-        setError(null);
-      } else if (!summaryRes.ok && !handlesRes.ok && !filesRes.ok) {
-        // All endpoints failed - gateway unreachable
-        setError("Gateway RPC unavailable (connection failed)");
-        setSummary(null);
-      } else {
-        // Partial success - show what we have
-        setSummary(summaryRes.ok ? summaryRes.data : null);
-        setError(null);
-      }
-
-      // Set handles and files
-      if (handlesRes.ok && handlesRes.data) {
-        const hdata = handlesRes.data;
-        setHandles(hdata.items ?? hdata.handles ?? []);
-      }
-      if (filesRes.ok && filesRes.data) {
-        const fdata = filesRes.data;
-        setFiles(fdata.items ?? fdata.files ?? []);
-      }
-
-      setLoading(false);
+    // If summary works, we have a working connection
+    if (summaryRes.ok && summaryRes.data) {
+      setSummary(summaryRes.data);
+      setError(null);
+    } else if (!summaryRes.ok && !handlesRes.ok && !filesRes.ok) {
+      // All endpoints failed - gateway unreachable
+      setError("Gateway RPC unavailable (connection failed)");
+      setSummary(null);
+    } else {
+      // Partial success - show what we have
+      setSummary(summaryRes.ok ? summaryRes.data : null);
+      setError(null);
     }
 
-    loadData();
+    // Set handles and files
+    if (handlesRes.ok && handlesRes.data) {
+      const hdata = handlesRes.data;
+      setHandles(hdata.items ?? hdata.handles ?? []);
+    }
+    if (filesRes.ok && filesRes.data) {
+      const fdata = filesRes.data;
+      setFiles(fdata.items ?? fdata.files ?? []);
+    }
 
-    return () => {
-      alive = false;
-    };
+    setLoading(false);
+    setIsRefreshing(false);
   }, []);
+
+  useEffect(() => {
+    // Refresh to validate/update SSR data
+    refresh();
+  }, [refresh]);
 
   const source = error ? "error" : loading ? "loading" : "live";
 
@@ -134,9 +138,18 @@ export default function IpndhtClient() {
         title="IPNDHT overview"
         description="Explore IPNDHT handles + file descriptors (devnet RPC only)"
         actions={
-          <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
-            ← Back to dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refresh}
+              disabled={isRefreshing}
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100 disabled:opacity-50"
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+            <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
+              ← Back to dashboard
+            </Link>
+          </div>
         }
       />
 

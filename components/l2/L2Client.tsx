@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SourceBadge } from "@/components/common/SourceBadge";
 import { L2_APPS, type L2App } from "@/lib/l2Config";
 import { fetchProxy } from "@/lib/clientFetch";
+import type { L2SSRData } from "@/app/l2/page";
 
 interface StatusData {
   node_id?: string;
@@ -51,46 +52,55 @@ function Detail({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-export default function L2Client() {
-  const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<StatusData | null>(null);
-  const [ipndht, setIpndht] = useState<IpndhtSummaryData | null>(null);
-  const [statusSource, setStatusSource] = useState<"live" | "error" | "loading">("loading");
-  const [ipndhtSource, setIpndhtSource] = useState<"live" | "error" | "loading">("loading");
+interface L2ClientProps {
+  initial?: L2SSRData;
+}
 
-  useEffect(() => {
-    let alive = true;
+export default function L2Client({ initial }: L2ClientProps) {
+  // Initialize from SSR data if available
+  const [loading, setLoading] = useState(!initial?.statusOk && !initial?.ipndhtOk);
+  const [status, setStatus] = useState<StatusData | null>(initial?.status ?? null);
+  const [ipndht, setIpndht] = useState<IpndhtSummaryData | null>(initial?.ipndht ?? null);
+  const [statusSource, setStatusSource] = useState<"live" | "error" | "loading">(
+    initial?.statusOk ? "live" : "loading"
+  );
+  const [ipndhtSource, setIpndhtSource] = useState<"live" | "error" | "loading">(
+    initial?.ipndhtOk ? "live" : "loading"
+  );
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-    async function loadData() {
-      const [statusRes, ipndhtRes] = await Promise.all([
-        fetchProxy<StatusData>("/status"),
-        fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
-      ]);
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
 
-      if (!alive) return;
+    const [statusRes, ipndhtRes] = await Promise.all([
+      fetchProxy<StatusData>("/status"),
+      fetchProxy<IpndhtSummaryData>("/ipndht/summary"),
+    ]);
 
-      // Status
-      if (statusRes.ok && statusRes.data) {
-        setStatus(statusRes.data);
-        setStatusSource("live");
-      } else {
-        setStatusSource("error");
-      }
-
-      // IPNDHT
-      if (ipndhtRes.ok && ipndhtRes.data) {
-        setIpndht(ipndhtRes.data);
-        setIpndhtSource("live");
-      } else {
-        setIpndhtSource("error");
-      }
-
-      setLoading(false);
+    // Status
+    if (statusRes.ok && statusRes.data) {
+      setStatus(statusRes.data);
+      setStatusSource("live");
+    } else {
+      setStatusSource("error");
     }
 
-    loadData();
-    return () => { alive = false; };
+    // IPNDHT
+    if (ipndhtRes.ok && ipndhtRes.data) {
+      setIpndht(ipndhtRes.data);
+      setIpndhtSource("live");
+    } else {
+      setIpndhtSource("error");
+    }
+
+    setLoading(false);
+    setIsRefreshing(false);
   }, []);
+
+  useEffect(() => {
+    // Refresh to validate/update SSR data
+    refresh();
+  }, [refresh]);
 
   return (
     <div className="space-y-6">
@@ -98,9 +108,18 @@ export default function L2Client() {
         title="L2 modules"
         description="IPPAN L2 surfaces run on top of L1 HashTimer, accounts, and IPNDHT descriptors (no invented state)."
         actions={
-          <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
-            ← Back to dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refresh}
+              disabled={isRefreshing}
+              className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/50 hover:text-emerald-100 disabled:opacity-50"
+            >
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </button>
+            <Link href="/" className="text-sm text-slate-400 underline-offset-4 hover:text-slate-100 hover:underline">
+              ← Back to dashboard
+            </Link>
+          </div>
         }
       />
 
